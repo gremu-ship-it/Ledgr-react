@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { seedDemoCompanyData, TARGET_DEMO_BUSINESS_ID } from '../demoSeederService';
+import { seedDemoCompanyData, stableDemoClientKey, TARGET_DEMO_BUSINESS_ID } from '../demoSeederService';
+import { isUuid } from '@/lib/clientKeys';
 
 const source = readFileSync('src/services/demoSeederService.ts', 'utf8');
 
@@ -22,9 +23,32 @@ describe('seedDemoCompanyData tenant guard', () => {
     expect(TARGET_DEMO_BUSINESS_ID).toBe('d38e4ce8-324b-4d27-b42d-74c25c5288a7');
   });
 
-  it('derives UUID client keys for stock movements but keeps the readable demo reference', () => {
+  it('derives stable UUID client keys for every seeded command category', () => {
+    const identities = [
+      ['STOCK', '01'],
+      ['INV', '001'],
+      ['INV-PAY', '001'],
+      ['EXP', '001'],
+      ['EXP-PAY', '001'],
+      ['POS', '001'],
+      ['PO', '01'],
+      ['GRN', '01'],
+    ] as const;
+    const keys = identities.map(([kind, id]) => stableDemoClientKey(kind, id));
+
+    expect(keys.every(isUuid)).toBe(true);
+    expect(new Set(keys).size).toBe(keys.length);
+    identities.forEach(([kind, id], index) => {
+      expect(stableDemoClientKey(kind, id)).toBe(keys[index]);
+    });
+  });
+
+  it('keeps stock references readable while passing the derived UUID as the idempotency key', () => {
     const ensureStock = source.slice(source.indexOf('async function ensureStock('), source.indexOf('async function seedInvoices('));
-    expect(ensureStock).toContain('reference: clientKey,');
-    expect(ensureStock).toContain('deriveClientKey(clientKey)');
+    expect(ensureStock).toContain("stableReference('STOCK', stockId)");
+    expect(ensureStock).toContain('reference,');
+    expect(ensureStock).toContain("} as InsertDto<'stock_movements'>, clientKey);");
+    expect(ensureStock).not.toContain('reference: clientKey');
+    expect(ensureStock).not.toContain('deriveClientKey(clientKey)');
   });
 });
