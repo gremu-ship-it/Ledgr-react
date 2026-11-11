@@ -256,7 +256,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       );
     }
 
-    const { entry: original, lines: originalLines } = await this.findByIdWithLines(originalId);
+    const original = await this.findById(originalId);
 
     if (original.status !== 'posted') {
       throw new ValidationError(
@@ -282,56 +282,26 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       );
     }
 
-    // FIX: derive the reversal's period from reversalDate, not the
-    // original entry's period_id. Copying the original's period_id would
-    // try to post the reversal into the same (possibly locked) period as
-    // the mistake it's correcting — exactly the case a reversal exists
-    // to handle. If no period covers reversalDate, period_id is left null.
-    const reversalPeriodId = await this.findPeriodIdForDate(original.business_id, reversalDate);
+    // Journal DML is command-only under RLS. Perform creation, line copying,
+    // posting, and marking the original as reversed in one authorized RPC.
+    const rpc = this.client.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { code?: string; message?: string } | null }>;
+    const { data: reversalResult, error: reversalError } = await rpc('reverse_journal_entry', {
+      p_original_id: originalId,
+      p_entry_number: entryNumber,
+      p_reversal_date: reversalDate,
+      p_reason: reason.trim(),
+    });
+    if (reversalError) throw toRepositoryError('journal_entries', reversalError);
 
-    const reversalLines = originalLines.map((line, i) => ({
-      line_number: i + 1,
-      account_id: line.account_id,
-      description: `Reversal of: ${line.description ?? original.description}`,
-      is_debit: !line.is_debit,
-      amount: line.amount,
-      amount_base: line.amount_base,
-      currency: line.currency,
-      exchange_rate: line.exchange_rate,
-      original_currency: line.original_currency,
-      original_amount: line.original_amount,
-      rate_date: line.rate_date,
-      rate_is_stale: line.rate_is_stale,
-      tax_code: line.tax_code,
-      tax_amount: line.tax_amount,
-      branch_id: line.branch_id,
-      department_id: line.department_id,
-      reconciled: false as const,
-    }));
-
-    const reversal = await this.createBalancedEntry(
-      {
-        business_id: original.business_id,
-        entry_number: entryNumber,
-        entry_date: reversalDate,
-        description: `Reversal of ${original.entry_number}: ${original.description}`,
-        source_type: 'reversal',
-        source_id: original.source_id,
-        currency: original.currency,
-        exchange_rate: original.exchange_rate,
-        status: 'draft',
-        reversal_of: originalId,
-        branch_id: original.branch_id,
-        department_id: original.department_id,
-        period_id: reversalPeriodId,
-        created_by: postedBy,
-      },
-      reversalLines,
-    );
-
-    const postedReversal = await this.post(reversal.entry.id, postedBy);
-
-    await this.update(originalId, { reversed_by: reversal.entry.id, status: 'reversed' });
+    const result = reversalResult as { reversalJournalEntryId?: string } | null;
+    const reversalEntryId = result?.reversalJournalEntryId;
+    if (!reversalEntryId) {
+      throw new ValidationError('journal_entries', 'Reversal command returned no journal entry id.');
+    }
+    const { entry: postedReversal, lines: reversalLines } = await this.findByIdWithLines(reversalEntryId);
 
     // Check if reversing an invoice payment
     const { data: invPayment } = await this.client
@@ -386,11 +356,11 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       resource_id: originalId,
       resource_ref: original.entry_number,
       old_values: { status: original.status },
-      new_values: { reversed_by: reversal.entry.id, reversal_entry_number: entryNumber },
+      new_values: { reversed_by: reversalEntryId, reversal_entry_number: entryNumber },
       notes: reason,
     });
 
-    return { entry: postedReversal, lines: reversal.lines };
+    return { entry: postedReversal, lines: reversalLines };
   }
 
   /**
@@ -450,18 +420,6 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       .delete()
       .eq('id', params.paymentId);
     if (deleteError) throw toRepositoryError(paymentsTable, deleteError);
-  }
-
-  private async findPeriodIdForDate(businessId: string, date: string): Promise<string | null> {
-    const { data, error } = await this.client
-      .from('accounting_periods')
-      .select('*')
-      .eq('business_id', businessId)
-      .lte('period_start', date)
-      .gte('period_end', date)
-      .maybeSingle();
-    if (error) throw toRepositoryError('journal_entries', error);
-    return (data as Row<'accounting_periods'> | null)?.id ?? null;
   }
 
   /**
