@@ -64,6 +64,12 @@ beforeAll(async () => {
          'R13 MRP Co','R13',null,null,null,false,'MWK','07-01','UTC',
          null,null,'Malawi',null,null,null,'INV','EXP','PAY','FOR_PROFIT',array['MANUFACTURING']) as id`,
     ) as string;
+    // The MRP RPC is Enterprise-entitled. Provision the synthetic tenant with
+    // an active plan so this suite tests netting semantics, not billing policy.
+    await db!.client.query(
+      "update public.businesses set plan_tier='enterprise', plan_expires_at='2099-01-01' where id=$1",
+      [businessId],
+    );
     await commitScalar('select public.provision_manufacturing_defaults($1,$2)', [businessId, ownerId]);
     const result = await db!.client.query(
       `select id from public.inventory_locations

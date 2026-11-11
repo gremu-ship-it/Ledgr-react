@@ -16,6 +16,7 @@ import type { PlanTier } from '@/lib/billing/plans';
 
 const en = JSON.parse(readFileSync(fileURLToPath(new URL('../../../i18n/locales/en.json', import.meta.url)), 'utf8')) as {
   navigation: { sections: Record<string, string>; items: Record<string, string> };
+  nav: { construction: Record<string, string> };
   changeOrders: { title: string };
 };
 
@@ -46,14 +47,14 @@ describe('construction workspace navigation', () => {
   it('keeps Construction in its own section after Inventory', () => {
     const section = NAV_SECTIONS.find((candidate) =>
       candidate.items.some((item) => item.path === '/construction'));
-    expect(section?.labelKey).toBe('navigation.sections.construction');
-    expect(en.navigation.sections.construction).toBe('Construction');
-    expect(en.navigation.items.constructionWorkspace).toBe('Workspace');
-    expect(en.navigation.items.constructionSubcontractors).toBe('Subcontractors');
+    expect(section?.labelKey).toBe('nav.construction.title');
+    expect(en.nav.construction.title).toBe('Construction');
+    expect(en.nav.construction.workspace).toBe('Workspace');
+    expect(en.nav.construction.subcontractors).toBe('Subcontractors');
     expect(section?.items.map((item) => item.path)).toEqual([
       '/construction',
       '/construction/subcontractors',
-      '/construction/certificates',
+      '/construction/payment-certificates',
       '/construction/rfis',
       '/construction/change-orders',
       '/construction/itps',
@@ -68,13 +69,13 @@ describe('construction workspace navigation', () => {
     expect(section?.items.every((item) => item.requiresOrgCapability === 'construction')).toBe(true);
 
     const inventoryIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.inventory');
-    const constructionIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.construction');
+    const constructionIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'nav.construction.title');
     expect(constructionIndex).toBe(inventoryIndex + 1);
   });
 
   it('is an Enterprise child gated by the business type, not a role-free link', () => {
     expect(navItemForPath('/construction')).toMatchObject({
-      labelKey: 'navigation.items.constructionWorkspace',
+      labelKey: 'nav.construction.workspace',
       path: '/construction',
       minPlan: 'enterprise',
       requiresOrgCapability: 'construction',
@@ -84,7 +85,7 @@ describe('construction workspace navigation', () => {
     expect(navItemForPath('/construction')?.requiresCapability).toBeUndefined();
   });
 
-  it('gates payment certificates, RFIs, change orders, ITPs, NCRs, and retention to Enterprise PROJECT_BASED construction businesses', () => {
+  it('shows all construction workflows for CONSTRUCTION and legacy PROJECT_BASED businesses', () => {
     const paths = (operatingModels: string[]) => visibleSectionsFor(
       () => true,
       'owner',
@@ -93,7 +94,7 @@ describe('construction workspace navigation', () => {
       operatingModels,
     ).flatMap((section) => section.items.map((item) => item.path));
 
-    expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/certificates');
+    expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/payment-certificates');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/rfis');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/change-orders');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/itps');
@@ -101,51 +102,52 @@ describe('construction workspace navigation', () => {
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/hse-incidents');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/toolbox-talks');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/retention-register');
-    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/certificates');
-    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/rfis');
-    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/change-orders');
-    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/itps');
-    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/ncrs');
-    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/hse-incidents');
-    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/toolbox-talks');
-    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/retention-register');
-    expect(navItemForPath('/construction/certificates')).toMatchObject({
-      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+    for (const path of [
+      '/construction/payment-certificates', '/construction/rfis', '/construction/change-orders',
+      '/construction/itps', '/construction/ncrs', '/construction/hse-incidents',
+      '/construction/toolbox-talks', '/construction/schedule', '/construction/retention-register',
+    ]) expect(paths(['CONSTRUCTION'])).toContain(path);
+    expect(navItemForPath('/construction/payment-certificates')).toMatchObject({
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['CONSTRUCTION', 'PROJECT_BASED'],
     });
     expect(navItemForPath('/construction/retention-register')).toMatchObject({
-      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['CONSTRUCTION', 'PROJECT_BASED'],
     });
     expect(navItemForPath('/construction/change-orders')).toMatchObject({
-      labelKey: 'changeOrders.title',
-      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+      labelKey: 'nav.construction.changeOrders',
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['CONSTRUCTION', 'PROJECT_BASED'],
     });
     expect(navItemForPath('/construction/itps')).toMatchObject({
-      labelKey: 'navigation.items.itps',
-      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+      labelKey: 'nav.construction.itps',
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['CONSTRUCTION', 'PROJECT_BASED'],
     });
     expect(navItemForPath('/construction/ncrs')).toMatchObject({
-      labelKey: 'navigation.items.ncrs',
-      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+      labelKey: 'nav.construction.ncrs',
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['CONSTRUCTION', 'PROJECT_BASED'],
     });
     expect(navItemForPath('/construction/hse-incidents')).toMatchObject({
-      labelKey: 'navigation.items.hseIncidents',
-      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+      labelKey: 'nav.construction.hseIncidents',
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['CONSTRUCTION', 'PROJECT_BASED'],
     });
     expect(navItemForPath('/construction/toolbox-talks')).toMatchObject({
-      labelKey: 'navigation.items.toolboxTalks',
-      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+      labelKey: 'nav.construction.toolboxTalks',
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['CONSTRUCTION', 'PROJECT_BASED'],
     });
-    expect(en.changeOrders.title).toBe('Change Orders');
-    expect(en.navigation.items.itps).toBe('Inspection Test Plans');
-    expect(en.navigation.items.ncrs).toBe('Non-Conformance Reports');
-    expect(en.navigation.items.hseIncidents).toBe('HSE Incidents');
-    expect(en.navigation.items.toolboxTalks).toBe('Toolbox Talks');
+    expect(en.nav.construction.changeOrders).toBe('Change Orders');
+    expect(en.nav.construction.itps).toBe('Inspection Test Plans');
+    expect(en.nav.construction.ncrs).toBe('Non-Conformance Reports');
+    expect(en.nav.construction.hseIncidents).toBe('HSE Incidents');
+    expect(en.nav.construction.toolboxTalks).toBe('Toolbox Talks');
+    expect(en.nav.construction.paymentCertificates).toBe('Payment Certificates');
+    expect(en.nav.construction.rfis).toBe('RFIs');
+    expect(en.nav.construction.schedule).toBe('Project Schedule');
+    expect(en.nav.construction.retentionRegister).toBe('Retention Register');
   });
 
   it('exposes Subcontractors only for Enterprise construction businesses', () => {
     const item = navItemForPath('/construction/subcontractors');
     expect(item).toMatchObject({
-      labelKey: 'navigation.items.constructionSubcontractors',
+      labelKey: 'nav.construction.subcontractors',
       path: '/construction/subcontractors',
       minPlan: 'enterprise',
       requiresOrgCapability: 'construction',
@@ -393,7 +395,7 @@ describe('construction vertical navigation cleanup', () => {
         visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(profile), 'enterprise', profile.operating_models)
           .flatMap((section) => section.items);
       expect(itemsFor(constructionBusiness).find((item) => item.path === '/construction')?.labelKey)
-        .toBe('navigation.items.constructionWorkspace');
+        .toBe('nav.construction.workspace');
       expect(itemsFor(retailBusiness).find((item) => item.path === '/construction')).toBeUndefined();
     });
 

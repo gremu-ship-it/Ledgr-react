@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, InsertDto, Json, Row } from '../types/database';
+import { fetchAllRows } from '@/lib/paginateQuery';
 
 export type WorkCentreType = 'machine' | 'labor' | 'cell' | 'outsourced';
 export type RoutingStatus = 'draft' | 'active' | 'archived';
@@ -61,6 +62,20 @@ export interface WorkOrderDetail extends WorkOrderSummary {
   routing: RoutingWithSteps | null;
   runs: (ProductionRun & { lines: ProductionRunLine[] })[];
 }
+
+export interface WorkOrderStockout {
+  work_order_id: string;
+  work_order_number: string;
+  product_name: string;
+  shortage_components: number;
+}
+
+function inChunks<T>(values: T[], size = 100): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) chunks.push(values.slice(index, index + size));
+  return chunks;
+}
+
 export interface CreateWorkOrderInput {
   product_id: string;
   bom_version_id: string;
@@ -251,6 +266,102 @@ export class ManufacturingRepository {
     const orders = data ?? [];
     const products = await this.loadProducts(businessId, orders.map((order) => order.product_id));
     return orders.map((order) => ({ ...order, product: products.get(order.product_id) ?? null }));
+  }
+
+  /**
+   * Read active work-order material requirements and current inventory in a
+   * small, batched set of queries. This is a dashboard diagnostic only: it
+   * never changes reservations or production state.
+   */
+  async listWorkOrderStockouts(businessId: string): Promise<WorkOrderStockout[]> {
+    const orders = await fetchAllRows<Pick<WorkOrder, 'id' | 'work_order_number' | 'product_id' | 'from_location_id'>>(
+      this.client.from('manufacturing_work_orders')
+        .select('id,work_order_number,product_id,from_location_id')
+        .eq('business_id', businessId)
+        .in('status', ['released', 'in_progress']),
+    );
+    if (!orders.length) return [];
+
+    const orderIds = orders.map((order) => order.id);
+    const [linePages, products] = await Promise.all([
+      Promise.all(inChunks(orderIds).map((ids) => fetchAllRows<Pick<
+        WorkOrderLine,
+        'work_order_id' | 'component_product_id' | 'planned_quantity' | 'actual_quantity_consumed'
+      >>(
+        this.client.from('manufacturing_work_order_lines')
+          .select('work_order_id,component_product_id,planned_quantity,actual_quantity_consumed')
+          .in('work_order_id', ids),
+      ))),
+      this.loadProducts(businessId, orders.map((order) => order.product_id)),
+    ]);
+    const lines = linePages.flat();
+    const componentIds = [...new Set(lines.map((line) => line.component_product_id))];
+    if (!componentIds.length) return [];
+
+    const balancePages = await Promise.all(inChunks(componentIds).map((ids) => fetchAllRows<Pick<
+      Row<'inventory_balances'>,
+      'product_id' | 'location_id' | 'quantity_available' | 'quantity_on_hand' | 'quantity_reserved'
+    >>(
+      this.client.from('inventory_balances')
+        .select('product_id,location_id,quantity_available,quantity_on_hand,quantity_reserved')
+        .eq('business_id', businessId)
+        .in('product_id', ids),
+    )));
+    const balances = balancePages.flat();
+
+    const availableByLocation = new Map<string, number>();
+    const availableByProduct = new Map<string, number>();
+    for (const balance of balances) {
+      const available = Number(balance.quantity_available ?? (balance.quantity_on_hand - balance.quantity_reserved));
+      const locationKey = `${balance.location_id}:${balance.product_id}`;
+      availableByLocation.set(locationKey, (availableByLocation.get(locationKey) ?? 0) + available);
+      availableByProduct.set(balance.product_id, (availableByProduct.get(balance.product_id) ?? 0) + available);
+    }
+
+    const orderById = new Map(orders.map((order) => [order.id, order]));
+    const requirements = new Map<string, { productId: string; locationId: string | null; quantity: number; orderIds: Set<string> }>();
+    for (const line of lines) {
+      const order = orderById.get(line.work_order_id);
+      const remaining = Math.max(0, Number(line.planned_quantity) - Number(line.actual_quantity_consumed));
+      if (!order || remaining <= 0) continue;
+      const stockLocation = order.from_location_id;
+      const key = `${stockLocation ?? '*'}:${line.component_product_id}`;
+      const group = requirements.get(key) ?? {
+        productId: line.component_product_id,
+        locationId: stockLocation,
+        quantity: 0,
+        orderIds: new Set<string>(),
+      };
+      group.quantity += remaining;
+      group.orderIds.add(order.id);
+      requirements.set(key, group);
+    }
+
+    const affected = new Map<string, Set<string>>();
+    for (const requirement of requirements.values()) {
+      const available = requirement.locationId
+        ? availableByLocation.get(`${requirement.locationId}:${requirement.productId}`) ?? 0
+        : availableByProduct.get(requirement.productId) ?? 0;
+      if (requirement.quantity <= available + 0.000001) continue;
+      for (const orderId of requirement.orderIds) {
+        const productsForOrder = affected.get(orderId) ?? new Set<string>();
+        productsForOrder.add(requirement.productId);
+        affected.set(orderId, productsForOrder);
+      }
+    }
+
+    return orders.flatMap((order) => {
+      const shortageProducts = affected.get(order.id);
+      const product = products.get(order.product_id);
+      return shortageProducts?.size && product
+        ? [{
+            work_order_id: order.id,
+            work_order_number: order.work_order_number,
+            product_name: product.name,
+            shortage_components: shortageProducts.size,
+          }]
+        : [];
+    });
   }
 
   async getWorkOrder(businessId: string, orderId: string): Promise<WorkOrderDetail> {

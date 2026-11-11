@@ -4,11 +4,12 @@ import { buildPosSaleQueuePayload, commitPosSaleDocuments } from '../posService'
 import { buildPosSaleRpcPayload } from '../posSaleRpc';
 import { repos } from '@/lib/repositories';
 import { realSupabase } from '@/lib/supabase';
+import { setDemoMode } from '@/lib/demo/mode';
 import { deriveClientKey } from '@/lib/clientKeys';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { usageService } from '@/lib/billing/UsageService';
 import type { PosCartItem } from '@/types/pos';
-import { missingPostPosSale, POST_POS_SALE_MISSING, postedPosSale } from './helpers/postPosSaleStub';
+import { POST_POS_SALE_MISSING, postedPosSale } from './helpers/postPosSaleStub';
 
 /**
  * The server-side posting path (stage 2 of docs/database/pos-sale-posting-rpc.md).
@@ -86,9 +87,9 @@ function queuePayload(clientKey = 'queue-key-1') {
   return buildPosSaleQueuePayload(salePayload, { receiptNumber: 'REC-1', clientKey });
 }
 
-/** Every call to `post_pos_sale` — the legacy path also uses rpc (audit, sequence). */
+/** Every gated call to the canonical post_pos_sale transaction. */
 function postCalls(spy: { mock: { calls: unknown[][] } }): unknown[][] {
-  return spy.mock.calls.filter(([name]) => name === 'post_pos_sale');
+  return spy.mock.calls.filter(([name]) => name === 'post_pos_sale_plan_gated');
 }
 
 const committedInvoice = {
@@ -174,10 +175,11 @@ describe('commitPosSaleDocuments — server-side posting', () => {
   });
 
   afterEach(() => {
+    setDemoMode(false);
     vi.restoreAllMocks();
   });
 
-  it('posts the sale with post_pos_sale and writes nothing client-side', async () => {
+  it('posts through the plan-gated canonical sale RPC and writes nothing client-side', async () => {
     const rpc = vi.spyOn(realSupabase, 'rpc').mockResolvedValue(postedPosSale() as never);
     const [create, pay, shift, journal] = legacyWrites();
 
@@ -206,39 +208,19 @@ describe('commitPosSaleDocuments — server-side posting', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('falls back to the client-side path when the migration is not applied yet, with the same keys', async () => {
+  it('fails closed when the plan-gated migration is missing instead of using an ungated write path', async () => {
     const rpc = vi
       .spyOn(realSupabase, 'rpc')
-      .mockImplementation(missingPostPosSale(() => ({ data: null, error: null })) as never);
-    const create = createWithLines().mockResolvedValue({
-      invoice: { ...committedInvoice, id: 'inv-legacy-1' } as never,
-      lines: [],
-    });
-    const pay = recordPayment();
-    vi.spyOn(repos.contact, 'findByBusiness').mockResolvedValue([] as never);
-    vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as never);
-    vi.spyOn(repos.pos, 'findShiftById').mockResolvedValue({ id: 'shift-7', status: 'open' } as never);
-    const shift = vi.spyOn(repos.pos, 'updateShiftTotals').mockResolvedValue(null);
+      .mockResolvedValue({ data: null, error: POST_POS_SALE_MISSING } as never);
+    const [create, pay] = legacyWrites();
 
-    const result = await commitPosSaleDocuments(queuePayload('queue-key-1'), {
-      businessId: 'biz-1',
-      clientKey: 'queue-key-1',
-    });
+    await expect(commitPosSaleDocuments(queuePayload('queue-key-1'), {
+      businessId: 'biz-1', clientKey: 'queue-key-1',
+    })).rejects.toThrow(/security controls are not deployed/);
 
-    // Tried once, recognised the missing function, and fell back rather than
-    // erroring the till out.
     expect(postCalls(rpc)).toHaveLength(1);
-    expect(create).toHaveBeenCalled();
-    expect(result.invoice.id).toBe('inv-legacy-1');
-
-    // Same parent key on the invoice, and the same derived tender keys the RPC
-    // was handed — so if the RPC had actually committed before the response was
-    // lost, the fallback would find its rows instead of duplicating them.
-    expect(create.mock.calls[0][2]).toBe('queue-key-1');
-    expect(pay).toHaveBeenCalledTimes(2);
-    expect(pay.mock.calls[0][1]).toBe(deriveClientKey('queue-key-1', 0));
-    expect(pay.mock.calls[1][1]).toBe(deriveClientKey('queue-key-1', 1));
-    expect(shift).toHaveBeenCalledWith('shift-7', { cashSales: 14400, otherSales: 10000 });
+    expect(create).not.toHaveBeenCalled();
+    expect(pay).not.toHaveBeenCalled();
   });
 
   it('rethrows a real rejection without falling back — nothing was written', async () => {
@@ -287,7 +269,8 @@ describe('commitPosSaleDocuments — server-side posting', () => {
     }
   });
 
-  it('treats a backend with no such function (demo client) as "fall back", never as a sale', async () => {
+  it('uses the local materializer only for the explicitly selected demo client', async () => {
+    setDemoMode(true);
     // The demo client answers `null` for every function it does not emulate,
     // so the switch must not mistake that for a committed sale.
     const rpc = vi.spyOn(realSupabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
@@ -308,19 +291,16 @@ describe('commitPosSaleDocuments — server-side posting', () => {
     expect(result.invoice.id).toBe('inv-legacy-1');
   });
 
-  it('does not retry the missing function, and never retries a real rejection', async () => {
+  it('does not retry a missing plan-gated RPC or fall back to client writes', async () => {
     const rpc = vi
       .spyOn(realSupabase, 'rpc')
       .mockResolvedValue({ data: null, error: POST_POS_SALE_MISSING } as never);
-    createWithLines().mockResolvedValue({ invoice: committedInvoice as never, lines: [] });
-    recordPayment();
-    vi.spyOn(repos.contact, 'findByBusiness').mockResolvedValue([] as never);
-    vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as never);
-    vi.spyOn(repos.pos, 'findShiftById').mockResolvedValue({ id: 'shift-7', status: 'open' } as never);
-    vi.spyOn(repos.pos, 'updateShiftTotals').mockResolvedValue(null);
+    const [create, pay] = legacyWrites();
 
-    await commitPosSaleDocuments(queuePayload(), { businessId: 'biz-1' });
-
+    await expect(commitPosSaleDocuments(queuePayload(), { businessId: 'biz-1' }))
+      .rejects.toThrow(/security controls are not deployed/);
     expect(postCalls(rpc)).toHaveLength(1);
+    expect(create).not.toHaveBeenCalled();
+    expect(pay).not.toHaveBeenCalled();
   });
 });

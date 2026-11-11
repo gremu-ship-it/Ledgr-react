@@ -9,6 +9,7 @@ import { i18n, normalizeLanguage } from '@/i18n';
 import { createLogger } from '@/lib/logger';
 import { queryClient } from '@/lib/queryClient';
 import { wipeIdentityTransitionCaches } from '@/lib/cacheWipe';
+import { clearPersistedCache, setActivePersistedCacheIdentity } from '@/lib/queryPersister';
 
 const log = createLogger('useAuthListener');
 
@@ -51,6 +52,8 @@ function purgeAllUserData(): void {
     // We want a clean slate — no stale contacts, invoices, balances,
     // dashboard metrics, etc. from the previous account.
     queryClient.clear();
+    setActivePersistedCacheIdentity(null, null);
+    void clearPersistedCache();
   } catch (err) {
     log.warn('Query cache clear during auth purge failed', { error: err });
   }
@@ -218,6 +221,17 @@ export function useAuthListener() {
         if (useAppStore.getState().currentUser) {
           purgeAllUserData();
         }
+        useAppStore.getState().setBusinessesLoading(false);
+        useAppStore.getState().setAuthLoading(false);
+      }
+    }).catch((err) => {
+      if (isDemoMode()) {
+        hydrateDemo();
+        return;
+      }
+      log.warn('Initial auth session lookup failed; starting with an empty cache', { error: err });
+      purgeAllUserData();
+      if (isMountedRef.current) {
         useAppStore.getState().setBusinessesLoading(false);
         useAppStore.getState().setAuthLoading(false);
       }

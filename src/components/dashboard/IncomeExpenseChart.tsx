@@ -9,7 +9,7 @@ import {
   Area,
   AreaChart,
 } from 'recharts';
-import { formatMwk } from '@/lib/formatters';
+import { formatCurrency } from '@/lib/formatters';
 
 interface ChartDataPoint {
   month: string;
@@ -22,16 +22,21 @@ interface IncomeExpenseChartProps {
   isLoading?: boolean;
   isError?: boolean;
   compact?: boolean;
+  currencyCode?: string;
 }
 
 function CustomTooltip({
   active,
   payload,
   label,
+  currencyCode,
+  locale,
 }: {
   active?: boolean;
   payload?: { name: string; value: number; color: string }[];
   label?: string;
+  currencyCode: string;
+  locale: string;
 }) {
   if (!active || !payload?.length) return null;
   return (
@@ -41,7 +46,7 @@ function CustomTooltip({
         <div key={entry.name} className="flex items-center gap-2 text-sm">
           <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="capitalize text-gray-500">{entry.name}:</span>
-          <span className="font-bold text-gray-900">{formatMwk(entry.value)}</span>
+          <span className="font-bold text-gray-900">{formatCurrency(entry.value, currencyCode, locale)}</span>
         </div>
       ))}
     </div>
@@ -54,8 +59,8 @@ function fmtShort(v: number) {
   return String(v);
 }
 
-export function IncomeExpenseChart({ data, isLoading, isError, compact }: IncomeExpenseChartProps) {
-  const { t } = useTranslation();
+export function IncomeExpenseChart({ data, isLoading, isError, compact, currencyCode = 'MWK' }: IncomeExpenseChartProps) {
+  const { t, i18n } = useTranslation();
   if (isLoading) {
     return (
       <div
@@ -97,18 +102,14 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
     );
   }
 
-  // Build a screen-reader description of the chart's data.
-  const totalIncome = data.reduce((sum, d) => sum + d.income, 0);
-  const totalExpenses = data.reduce((sum, d) => sum + d.expenses, 0);
-  const monthList = data.map((d) => `${d.month}: income ${formatMwk(d.income)}, expenses ${formatMwk(d.expenses)}`).join('. ');
-  const ariaLabel = `Area chart comparing monthly income and expenses over ${data.length} months. Total income ${formatMwk(totalIncome)}, total expenses ${formatMwk(totalExpenses)}. ${monthList}.`;
-
   return (
-      <div
-        className={compact ? 'h-52' : 'h-72'}
-        role="img"
-        aria-label={ariaLabel}
-      >
+    <div role="group" aria-label={t('dashboard.chart.accessibleLabel')}>
+      <table className="sr-only">
+        <caption>{t('dashboard.chart.accessibleSummary')}</caption>
+        <thead><tr><th scope="col">{t('dashboard.chart.period')}</th><th scope="col">{t('dashboard.income')}</th><th scope="col">{t('dashboard.expenses')}</th></tr></thead>
+        <tbody>{data.map((point) => <tr key={point.month}><th scope="row">{point.month}</th><td>{formatCurrency(point.income, currencyCode, i18n.language)}</td><td>{formatCurrency(point.expenses, currencyCode, i18n.language)}</td></tr>)}</tbody>
+      </table>
+      <div className={compact ? 'h-52' : 'h-72'} aria-hidden="true">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <defs>
@@ -136,7 +137,7 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
             tickLine={false}
             width={44}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip currencyCode={currencyCode} locale={i18n.language} />} />
           <Legend
             wrapperStyle={{ fontSize: 12, paddingTop: 16 }}
             iconType="circle"
@@ -167,6 +168,7 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
           />
         </AreaChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

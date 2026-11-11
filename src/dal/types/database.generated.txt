@@ -5947,29 +5947,38 @@ export type Database = {
         Row: {
           branch_id: string
           business_id: string
+          code: string
           created_at: string
+          default_cash_account_id: string | null
           id: string
           is_active: boolean
           name: string
           preferred_location_id: string | null
+          updated_at: string
         }
         Insert: {
           branch_id: string
           business_id: string
+          code: string
           created_at?: string
+          default_cash_account_id?: string | null
           id?: string
           is_active?: boolean
           name: string
           preferred_location_id?: string | null
+          updated_at?: string
         }
         Update: {
           branch_id?: string
           business_id?: string
+          code?: string
           created_at?: string
+          default_cash_account_id?: string | null
           id?: string
           is_active?: boolean
           name?: string
           preferred_location_id?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -8086,6 +8095,16 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_partner_peer_businesses: {
+        Row: {
+          brand_color: string | null
+          id: string
+          logo_url: string | null
+          name: string | null
+          trading_name: string | null
+        }
+        Relationships: []
       }
       v_reorder_alerts: {
         Row: {

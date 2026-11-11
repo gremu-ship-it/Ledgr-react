@@ -13,7 +13,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, saleFixture, key } from './fixtures';
+import { seedFixture, identities, saleFixture, key, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('r06-concurrent-2c');
@@ -30,7 +30,8 @@ let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs); }
   catch (e) { seedError = safeError(e); }
 });
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -98,7 +99,7 @@ test(meta('R06.POS.STOCK.CONCURRENT-2C', 'Two independent authenticated sessions
   const runOnPrimary = async () => {
     await db.beginAsRole('authenticated', uid1);
     try {
-      const r = await db.client.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload1)]);
+      const r = await db.client.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload1)]);
       await db.commitTx();
       return { ok: true, result: r.rows[0].r as { id: string; number: string; idempotent: boolean } };
     } catch (e) {
@@ -109,7 +110,7 @@ test(meta('R06.POS.STOCK.CONCURRENT-2C', 'Two independent authenticated sessions
   const runOnSecond = async () => {
     await client2.beginAsRole('authenticated', uid2);
     try {
-      const r = await client2.client.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload2)]);
+      const r = await client2.client.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload2)]);
       await client2.commitTx();
       return { ok: true, result: r.rows[0].r as { id: string; number: string; idempotent: boolean } };
     } catch (e) {
@@ -176,7 +177,7 @@ test(meta('R06.POS.STOCK.CONCURRENT-2C', 'Two independent authenticated sessions
   const winnerPayload = a.ok ? payload1 : payload2;
   const winnerUid = a.ok ? uid1 : uid2;
   const replayBefore = after;
-  const replay = (await db.commitAsRole('authenticated', winnerUid, 'select public.post_pos_sale($1::jsonb) r', [JSON.stringify(winnerPayload)])).rows[0].r as { id: string; idempotent: boolean };
+  const replay = (await db.commitAsRole('authenticated', winnerUid, 'select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(winnerPayload)])).rows[0].r as { id: string; idempotent: boolean };
   expect(replay.id).toBe(winnerInvoice);
   expect(replay.idempotent).toBe(true);
   const replayAfter = (await db.client.query(`select

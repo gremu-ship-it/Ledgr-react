@@ -7,7 +7,7 @@ const workspace = readFileSync('src/pages/construction/ConstructionWorkspacePage
 describe('construction certificate and retention register routes', () => {
   it('registers the new pages behind Enterprise, PROJECT_BASED, and Construction gates', () => {
     for (const [path, page] of [
-      ['/construction/certificates', '<PaymentCertificatesPage />'],
+      ['/construction/payment-certificates', '<PaymentCertificatesPage />'],
       ['/construction/retention-register', '<RetentionRegisterPage />'],
       ['/construction/rfis', '<RfiListPage />'],
       ['/construction/rfis/new', '<RfiNewPage />'],
@@ -15,10 +15,14 @@ describe('construction certificate and retention register routes', () => {
     ]) {
       const route = app.split(`path="${path}"`)[1]?.split('</Route>')[0] ?? '';
       expect(route).toContain('PlanGate minPlan="enterprise"');
-      expect(route).toContain("OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}");
+      expect(route).toContain("OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}");
       expect(route).toContain('<CapabilityGate capability="construction">');
       expect(route).toContain(page);
     }
+  });
+
+  it('redirects the legacy certificates URL to the new payment-certificates URL', () => {
+    expect(app).toContain('path="/construction/certificates" element={<Navigate to="/construction/payment-certificates" replace />}');
   });
 
   it('preserves the existing retention aging route and its workspace rendering', () => {

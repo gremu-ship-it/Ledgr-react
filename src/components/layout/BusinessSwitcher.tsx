@@ -2,9 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, Building2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
+import { useTranslation } from 'react-i18next';
+import { readPartnerClientContext } from '@/partner/partnerClientContext';
 import { AddBusinessButton } from '@/components/layout/AddBusinessButton';
 
 export function BusinessSwitcher() {
+  const { t } = useTranslation();
+  const partnerContext = readPartnerClientContext();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -28,6 +32,15 @@ export function BusinessSwitcher() {
       );
     };
   }, []);
+
+  if (partnerContext) {
+    return (
+      <div className="flex max-w-[220px] items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" aria-label={t('partner.viewingAsPartner')}>
+        <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="truncate">{partnerContext.businessName}</span>
+      </div>
+    );
+  }
 
   if (!currentBusiness || !currentBusiness.business) {
     return (
