@@ -9,6 +9,11 @@ const UUID_FIX = readFileSync(
   'supabase/migrations/20261224000002_fix_journal_reversal_actor_uuid.sql',
   'utf8',
 ).toLowerCase();
+// Production recorded the corrective SQL under generated version 20261111200201.
+const RECORDED_UUID_FIX = readFileSync(
+  'supabase/migrations/20261111200201_fix_journal_reversal_actor_uuid.sql',
+  'utf8',
+).toLowerCase();
 const REPOSITORY = readFileSync('src/dal/repositories/JournalRepository.ts', 'utf8');
 const RLS = readFileSync(
   'supabase/migrations/20261218000000_role_aware_financial_rls.sql',
@@ -33,6 +38,10 @@ describe('journal entry reversal command', () => {
     expect(MIGRATION).toContain("set status = 'posted', posted_by = v_user_id::text, posted_at = now()");
     expect(MIGRATION).toContain("set status = 'reversed', reversed_by = v_reversal_id");
     expect(MIGRATION).toContain("return jsonb_build_object('reversaljournalentryid', v_reversal_id)");
+  });
+
+  it('keeps the recorded production migration SQL aligned with the final forward repair', () => {
+    expect(RECORDED_UUID_FIX).toBe(UUID_FIX);
   });
 
   it('uses UUID actor values for created_by and posted_by in the forward repair', () => {
