@@ -1,9 +1,11 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
 import {
@@ -12,11 +14,14 @@ import {
 } from '@/offline/registerServiceWorker';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
+import { queryClient } from '@/lib/queryClient';
+import { persistOptions } from '@/lib/queryPersister';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { useDefaultRoute } from './hooks/useDefaultRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { ManufacturingDashboardRedirect } from '@/routes/ManufacturingDashboardRedirect';
 import { TrialBalanceUpgradePrompt } from '@/components/reports/TrialBalanceUpgradePrompt';
 import { ProfitLossUpgradePrompt } from '@/components/reports/ProfitLossUpgradePrompt';
 import { BalanceSheetUpgradePrompt } from '@/components/reports/BalanceSheetUpgradePrompt';
@@ -121,10 +126,11 @@ const RoutingsPage = lazyPage(() => import('@/pages/manufacturing/RoutingsPage')
 const ProductionRunsPage = lazyPage(() => import('@/pages/manufacturing/ProductionRunsPage'), 'ProductionRunsPage');
 const MrpWorkbenchPage = lazyPage(() => import('@/pages/manufacturing/MrpWorkbenchPage'), 'MrpWorkbenchPage');
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
+const PosRegistersPage = lazyPage(() => import('@/pages/pos/PosRegistersPage'), 'PosRegistersPage');
+const PosShiftsPage = lazyPage(() => import('@/pages/pos/PosShiftsPage'), 'PosShiftsPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
 const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPage');
-const PayrollPage = lazyPage(() => import('@/pages/PayrollPage'), 'PayrollPage');
 const TaxConfigPage = lazyPage(() => import('@/pages/payroll/TaxConfigPage'), 'TaxConfigPage');
 const EmployeeListPage = lazyPage(() => import('@/pages/payroll/EmployeeListPage'), 'EmployeeListPage');
 const EmployeeNewPage = lazyPage(() => import('@/pages/payroll/EmployeeNewPage'), 'EmployeeNewPage');
@@ -178,6 +184,7 @@ const PartnerOverviewPage = lazyPage(() => import('@/pages/partner-admin/Partner
 const PartnerSettingsPage = lazyPage(() => import('@/pages/partner-admin/PartnerSettingsPage'), 'PartnerSettingsPage');
 const PartnerClientsPage = lazyPage(() => import('@/pages/partner-admin/PartnerClientsPage'), 'PartnerClientsPage');
 const PartnerBillingPage = lazyPage(() => import('@/pages/partner-admin/PartnerBillingPage'), 'PartnerBillingPage');
+const PartnerStaffPage = lazyPage(() => import('@/pages/partner-admin/PartnerStaffPage'), 'PartnerStaffPage');
 const CashDepositsPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'CashDepositsPage');
 const NewCashDepositPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'NewCashDepositPage');
 const CashDepositDetailPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'CashDepositDetailPage');
@@ -378,6 +385,13 @@ export function SmartRedirect() {
 function App() {
   const { t } = useTranslation();
   useAuthListener();
+  const isAuthLoading = useAppStore((state) => state.isAuthLoading);
+  const isBusinessesLoading = useAppStore((state) => state.isBusinessesLoading);
+  // Store identity setters update the query-persister namespace synchronously
+  // before the auth and tenant loading flags are cleared. Keep the provider
+  // unmounted until both resolutions finish so persisted data cannot restore
+  // under an anonymous or stale tenant identity.
+  const cacheIdentityReady = !isAuthLoading && !isBusinessesLoading;
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
@@ -393,9 +407,13 @@ function App() {
   if (!isSupabaseConfigured && !onPublicDemo && !isDemoMode()) {
     return <ConfigError />;
   }
+  if (!cacheIdentityReady) {
+    return <LoadingSpinner fullScreen label={t('common.loading')} />;
+  }
 
   return (
-    <ErrorBoundary name="App">
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+      <ErrorBoundary name="App">
       <UpdateAvailableBanner />
       <PartnerProvider>
         <BrowserRouter>
@@ -445,6 +463,7 @@ function App() {
                 <Route path="/partner-admin/partners/:id" element={<PartnerOverviewPage />} />
                 <Route path="/partner-admin/partners/:id/settings" element={<PartnerSettingsPage />} />
                 <Route path="/partner-admin/partners/:id/clients" element={<PartnerClientsPage />} />
+                <Route path="/partner-admin/partners/:id/staff" element={<PartnerStaffPage />} />
                 <Route path="/partner-admin/partners/:id/billing" element={<PartnerBillingPage />} />
               </Route>
             </Route>
@@ -465,10 +484,10 @@ function App() {
                     }
                   />
                   <Route
-                    path="/construction/certificates"
+                    path="/construction/payment-certificates"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('navigation.items.paymentCertificates')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction">
                             <PaymentCertificatesPage />
                           </CapabilityGate>
@@ -476,11 +495,12 @@ function App() {
                       </PlanGate>
                     }
                   />
+                  <Route path="/construction/certificates" element={<Navigate to="/construction/payment-certificates" replace />} />
                   <Route
                     path="/construction/retention-register"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('navigation.items.retentionRegister')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction">
                             <RetentionRegisterPage />
                           </CapabilityGate>
@@ -492,7 +512,7 @@ function App() {
                     path="/construction/rfis"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('navigation.items.rfis')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><RfiListPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -502,7 +522,7 @@ function App() {
                     path="/construction/rfis/new"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('navigation.items.rfis')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><RfiNewPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -512,7 +532,7 @@ function App() {
                     path="/construction/rfis/:id"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('navigation.items.rfis')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><RfiDetailPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -522,7 +542,7 @@ function App() {
                     path="/construction/change-orders"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('changeOrders.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ChangeOrderListPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -532,7 +552,7 @@ function App() {
                     path="/construction/change-orders/new"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('changeOrders.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ChangeOrderNewPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -542,7 +562,7 @@ function App() {
                     path="/construction/change-orders/:id"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('changeOrders.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ChangeOrderDetailPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -552,7 +572,7 @@ function App() {
                     path="/construction/itps"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.itps.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ItpListPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -562,7 +582,7 @@ function App() {
                     path="/construction/itps/new"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.itps.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ItpNewPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -572,7 +592,7 @@ function App() {
                     path="/construction/itps/:id"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.itps.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ItpDetailPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -582,7 +602,7 @@ function App() {
                     path="/construction/ncrs"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.ncrs.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><NcrListPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -592,7 +612,7 @@ function App() {
                     path="/construction/ncrs/new"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.ncrs.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><NcrNewPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -602,7 +622,7 @@ function App() {
                     path="/construction/ncrs/:id"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.ncrs.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><NcrDetailPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -612,7 +632,7 @@ function App() {
                     path="/construction/hse-incidents"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.hseIncidents.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><HseIncidentListPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -622,7 +642,7 @@ function App() {
                     path="/construction/hse-incidents/new"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.hseIncidents.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><HseIncidentNewPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -632,7 +652,7 @@ function App() {
                     path="/construction/hse-incidents/:id"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.hseIncidents.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><HseIncidentDetailPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -642,7 +662,7 @@ function App() {
                     path="/construction/toolbox-talks"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.toolboxTalks.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ToolboxTalkListPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -652,7 +672,7 @@ function App() {
                     path="/construction/toolbox-talks/new"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('construction.toolboxTalks.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ToolboxTalkNewPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -662,7 +682,7 @@ function App() {
                     path="/construction/schedule"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('scheduling.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><SchedulePage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -672,7 +692,7 @@ function App() {
                     path="/construction/schedule/:projectId"
                     element={
                       <PlanGate minPlan="enterprise" featureName={t('scheduling.title')}>
-                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                        <OperatingModelGate requiredOperatingModels={['CONSTRUCTION', 'PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><SchedulePage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
@@ -809,22 +829,37 @@ function App() {
                       </PlanGate>
                     }
                   />
+                  {/* Compatibility alias: the canonical route applies the same plan and capability gates. */}
                   <Route
                     path="/manufacturing/dashboard"
-                    element={
-                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
-                        <CapabilityGate capability="manufacturing">
-                          <ManufacturingDashboardPage />
-                        </CapabilityGate>
-                      </PlanGate>
-                    }
+                    element={<ManufacturingDashboardRedirect />}
                   />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
                     <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
-                      <CapabilityGate capability="pos">
-                        <PosPage />
-                      </CapabilityGate>
+                      <PlanGate minPlan="starter" featureNameKey="pos.pointOfSale">
+                        <CapabilityGate capability="pos">
+                          <PosPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    </OperatingModelGate>
+                  } />
+                  <Route path="/pos/registers" element={
+                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                      <PlanGate minPlan="starter" featureNameKey="pos.registers">
+                        <CapabilityGate capability="pos" rolePath="/pos/registers">
+                          <PosRegistersPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    </OperatingModelGate>
+                  } />
+                  <Route path="/pos/shifts" element={
+                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                      <PlanGate minPlan="growth" featureNameKey="pos.shiftHistory">
+                        <CapabilityGate capability="pos" rolePath="/pos/shifts">
+                          <PosShiftsPage />
+                        </CapabilityGate>
+                      </PlanGate>
                     </OperatingModelGate>
                   } />
 
@@ -834,47 +869,43 @@ function App() {
                   <Route path="/invoices" element={<InvoicesPage />} />
                   <Route path="/payroll/employees" element={
                     <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.employees')}>
-                      <EmployeeListPage />
+                      <SectionErrorBoundary sectionName="Payroll employees" fallbackHeight="360px"><EmployeeListPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
                   <Route path="/payroll/employees/new" element={
                     <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.employees')}>
-                      <EmployeeNewPage />
+                      <SectionErrorBoundary sectionName="New payroll employee" fallbackHeight="360px"><EmployeeNewPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
                   <Route path="/payroll/employees/:id" element={
                     <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.employees')}>
-                      <EmployeeDetailPage />
+                      <SectionErrorBoundary sectionName="Payroll employee details" fallbackHeight="360px"><EmployeeDetailPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
                   <Route path="/payroll/pay-runs" element={
                     <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
-                      <PayRunListPage />
+                      <SectionErrorBoundary sectionName="Payroll pay runs" fallbackHeight="360px"><PayRunListPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
                   <Route path="/payroll/pay-runs/new" element={
                     <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
-                      <PayRunNewPage />
+                      <SectionErrorBoundary sectionName="New payroll pay run" fallbackHeight="360px"><PayRunNewPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
                   <Route path="/payroll/pay-runs/:id" element={
                     <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
-                      <PayRunDetailPage />
+                      <SectionErrorBoundary sectionName="Payroll pay run details" fallbackHeight="360px"><PayRunDetailPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
                   <Route path="/payroll/leave" element={
                     <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.leaveRequests')}>
-                      <LeaveRequestsPage />
+                      <SectionErrorBoundary sectionName="Payroll leave requests" fallbackHeight="360px"><LeaveRequestsPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
-                  <Route path="/payroll" element={
-                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.title')}>
-                      <PayrollPage />
-                    </PartnerPlanGate>
-                  } />
+                  <Route path="/payroll" element={<Navigate to="/payroll/employees" replace />} />
                   <Route path="/payroll/tax-config" element={
                     <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.taxConfig')}>
-                      <TaxConfigPage />
+                      <SectionErrorBoundary sectionName="Payroll tax configuration" fallbackHeight="360px"><TaxConfigPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
 
@@ -1044,7 +1075,7 @@ function App() {
 
                   {/* AI & Settings */}
                   <Route path="/ai" element={
-                    <PartnerPlanGate featureKey="ai_advisor" capability="ai_insights" featureName="AI Insights">
+                    <PartnerPlanGate featureKey="ai_advisor" featureName="AI Insights">
                       <AiInsightsPage />
                     </PartnerPlanGate>
                   } />
@@ -1082,7 +1113,8 @@ function App() {
           <CookieConsentBanner />
         </BrowserRouter>
       </PartnerProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </PersistQueryClientProvider>
   );
 }
 

@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { registerQueryCacheClearer } from '@/lib/queryCacheLifecycle';
 import { createLogger } from '@/lib/logger';
 import { pushError } from '@/lib/notifications';
 
@@ -49,3 +50,5 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+registerQueryCacheClearer(() => queryClient.clear());

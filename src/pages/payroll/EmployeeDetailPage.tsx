@@ -56,7 +56,7 @@ function EditEmployeeForm({ employee, onCancel, onSave, isSaving, t }: EditEmplo
     gross_salary: text(employee.gross_salary, '0'),
     contract_effective_from: todayDate(),
     employment_type: text(employee.employment_type, 'permanent'),
-    pay_frequency: text(employee.pay_frequency, 'monthly'),
+    pay_frequency: text(employee.pay_frequency, 'monthly') === 'bi_weekly' ? 'biweekly' : text(employee.pay_frequency, 'monthly'),
     status: text(employee.status, 'active'),
     termination_date: text(employee.termination_date ?? employee.end_date),
     bank_name: text(employee.bank_name),
@@ -224,7 +224,8 @@ function OverviewTab({ employee, currency, locale, t }: { employee: Row; currenc
   const currentContract = contracts.find((contract) => activeOnDate(contract, today)) ?? contracts[0];
   const status = text(employee.status, 'active');
   const salary = currentContract?.gross_salary ?? employee.gross_salary;
-  const payFrequency = text(currentContract?.pay_frequency ?? employee.pay_frequency, 'monthly');
+  const rawPayFrequency = text(currentContract?.pay_frequency ?? employee.pay_frequency, 'monthly');
+  const payFrequency = rawPayFrequency === 'bi_weekly' ? 'biweekly' : rawPayFrequency;
   const employmentType = text(currentContract?.contract_type ?? employee.employment_type, 'permanent');
   return (
     <div className="grid gap-5 lg:grid-cols-2">
@@ -323,7 +324,7 @@ export function EmployeeDetailPage() {
   });
 
   const employee = asRow(employeeQuery.data);
-  const componentRows = componentsQuery.data ?? [];
+  const componentRows = Array.isArray(componentsQuery.data) ? componentsQuery.data : [];
   const overridableComponents = componentRows.filter((component) => text(component.calculation_basis) !== 'tax_table');
   const overrides = asRows(employee.components);
   const overridesByComponent = new Map<string, Row[]>();
@@ -490,11 +491,11 @@ export function EmployeeDetailPage() {
               </Button>
             </div>
             {leaveQuery.isError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{t('payroll.leaveBalanceLoadFailed')}</p>}
-            {leaveQuery.isPending ? <PageSkeleton /> : (leaveQuery.data?.length ?? 0) === 0 ? (
+            {leaveQuery.isPending ? <PageSkeleton /> : (Array.isArray(leaveQuery.data) ? leaveQuery.data.length : 0) === 0 ? (
               <EmptyState title={t('payroll.noLeaveBalances')} description={t('payroll.noLeaveBalancesDescription')} variant="finance" />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {leaveQuery.data?.map((balance) => {
+                {(Array.isArray(leaveQuery.data) ? leaveQuery.data : []).map((balance) => {
                   const leaveType = asRow(balance.leave_type);
                   const entitled = numeric(balance.entitled_days);
                   const used = numeric(balance.used_days);

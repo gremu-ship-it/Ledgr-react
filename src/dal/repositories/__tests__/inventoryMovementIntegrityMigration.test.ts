@@ -6,6 +6,10 @@ const migration = readFileSync(
   join(process.cwd(), 'supabase/migrations/20261130000000_inventory_movement_integrity.sql'),
   'utf8',
 );
+const uuidShapeFix = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20261224000003_fix_stock_transfer_uuid_source_ids.sql'),
+  'utf8',
+).toLowerCase();
 
 describe('inventory movement integrity migration', () => {
   it('guards future source/product/location duplicates without rewriting existing movement rows', () => {
@@ -24,6 +28,15 @@ describe('inventory movement integrity migration', () => {
     expect(dispatch).toMatch(/quantity_dispatched\s*=\s*v_quantity/i);
     expect(dispatch).not.toMatch(/quantity_received\s*=\s*v_quantity/i);
     expect(dispatch).toMatch(/status\s*=\s*'dispatched'/i);
+  });
+
+  it('compares and writes transfer source IDs safely across UUID and TEXT schema shapes', () => {
+    expect(uuidShapeFix).toContain('create or replace function public.dispatch_stock_transfer_atomically(');
+    expect(uuidShapeFix).toContain('source_id::text = p_transfer_id::text');
+    expect(uuidShapeFix).toContain('if v_uuid_columns then');
+    expect(uuidShapeFix).toContain("'stock_transfer', p_transfer_id, v_transfer.transfer_number, nullif(v_actor, '')::uuid");
+    expect(uuidShapeFix).toContain("'stock_transfer', p_transfer_id::text, v_transfer.transfer_number, v_actor");
+    expect(uuidShapeFix).not.toContain('source_id = p_transfer_id::text');
   });
 
   it('keeps receipt confirmation from inserting a second pair and rejects quantity mismatches', () => {

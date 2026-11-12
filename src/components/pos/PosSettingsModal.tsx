@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Settings,
   X,
@@ -19,6 +20,7 @@ interface PosSettingsModalProps {
   settings: PosSettings;
   onSaveSettings: (newSettings: Partial<PosSettings>) => Promise<void>;
   isOwnerOrManager: boolean;
+  canConfigureDiscountThresholds?: boolean;
 }
 
 export function PosSettingsModal({
@@ -27,26 +29,62 @@ export function PosSettingsModal({
   settings,
   onSaveSettings,
   isOwnerOrManager,
+  canConfigureDiscountThresholds = false,
 }: PosSettingsModalProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'discounts' | 'receipt' | 'payments' | 'security'>('discounts');
   const [formData, setFormData] = useState<PosSettings>({ ...settings });
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const settingsSnapshot = JSON.stringify(settings);
+  const [lastSettingsSnapshot, setLastSettingsSnapshot] = useState('');
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open && (!wasOpen || lastSettingsSnapshot !== settingsSnapshot)) {
+    setFormData({ ...settings });
+    setSaveError(null);
+    setSavedSuccess(false);
+    setLastSettingsSnapshot(settingsSnapshot);
+    setWasOpen(true);
+  } else if (!open && wasOpen) {
+    setWasOpen(false);
+  }
 
   if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isOwnerOrManager) {
-      alert('Only store owners and managers can update POS settings.');
+      setSaveError(t('pos.override.settingsRoleRequired'));
+      return;
+    }
+    const thresholdsChanged =
+      formData.max_cashier_discount_percent !== settings.max_cashier_discount_percent ||
+      formData.max_manager_discount_percent !== settings.max_manager_discount_percent;
+    if (thresholdsChanged && !canConfigureDiscountThresholds) {
+      setSaveError(t('pos.override.growthRequired'));
       return;
     }
 
     setIsSaving(true);
+    setSaveError(null);
     try {
-      await onSaveSettings(formData);
+      const settingsToSave: Partial<PosSettings> = { ...formData };
+      if (thresholdsChanged) {
+        settingsToSave.cashier_max_discount_percent = formData.max_cashier_discount_percent;
+        settingsToSave.manager_max_discount_percent = formData.max_manager_discount_percent;
+      } else {
+        delete settingsToSave.max_cashier_discount_percent;
+        delete settingsToSave.cashier_max_discount_percent;
+        delete settingsToSave.max_manager_discount_percent;
+        delete settingsToSave.manager_max_discount_percent;
+      }
+      await onSaveSettings(settingsToSave);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2000);
+    } catch {
+      setSaveError(t('pos.override.settingsSaveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -122,8 +160,12 @@ export function PosSettingsModal({
           {!isOwnerOrManager && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>Read-only view. Store Owner or Manager credentials are required to modify settings.</span>
+              <span>{t('pos.override.settingsRoleRequired')}</span>
             </div>
+          )}
+          {saveError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-800">{saveError}</p>}
+          {!canConfigureDiscountThresholds && activeTab === 'discounts' && (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">{t('pos.override.growthRequired')}</p>
           )}
 
           {/* TAB 1: DISCOUNTS & LIMITS */}
@@ -132,13 +174,13 @@ export function PosSettingsModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">
-                    Cashier Max Discount (%)
+                    {t('pos.override.cashierDiscountThreshold')}
                   </label>
                   <input
                     type="number"
                     min={0}
                     max={100}
-                    disabled={!isOwnerOrManager}
+                    disabled={!isOwnerOrManager || !canConfigureDiscountThresholds}
                     value={formData.max_cashier_discount_percent}
                     onChange={(e) =>
                       setFormData({
@@ -148,18 +190,18 @@ export function PosSettingsModal({
                     }
                     className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold focus:border-brand-500 focus:outline-none disabled:bg-gray-50"
                   />
-                  <p className="text-[11px] text-gray-400 mt-1">Discounts above this will require manager PIN</p>
+                  <p className="text-[11px] text-gray-400 mt-1">{t('pos.override.discountApprovalHint')}</p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">
-                    Manager Max Discount (%)
+                    {t('pos.override.managerDiscountThreshold')}
                   </label>
                   <input
                     type="number"
                     min={0}
                     max={100}
-                    disabled={!isOwnerOrManager}
+                    disabled={!isOwnerOrManager || !canConfigureDiscountThresholds}
                     value={formData.max_manager_discount_percent}
                     onChange={(e) =>
                       setFormData({
@@ -169,7 +211,7 @@ export function PosSettingsModal({
                     }
                     className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold focus:border-brand-500 focus:outline-none disabled:bg-gray-50"
                   />
-                  <p className="text-[11px] text-gray-400 mt-1">Maximum authorization threshold for managers</p>
+                  <p className="text-[11px] text-gray-400 mt-1">{t('pos.override.managerDiscountApprovalHint')}</p>
                 </div>
               </div>
 
@@ -353,30 +395,30 @@ export function PosSettingsModal({
           {activeTab === 'security' && (
             <div className="space-y-3">
               <p className="text-xs text-gray-600">
-                Configure manager override requirements for high-risk cashier operations.
+                {t('pos.override.securityDescription')}
               </p>
 
               <div className="space-y-2">
                 {[
                   {
                     key: 'require_manager_approval_discount',
-                    label: 'Require Manager Approval for Discounts',
-                    desc: 'Required when cashier applies discount above the max limit',
+                    label: t('pos.override.requireDiscountApproval'),
+                    desc: t('pos.override.discountApprovalSettingHint'),
                   },
                   {
                     key: 'require_manager_approval_void',
-                    label: 'Require Manager Approval to Void Sale',
-                    desc: 'Cashier cannot void a completed sale without manager PIN',
+                    label: t('pos.override.requireVoidApproval'),
+                    desc: t('pos.override.voidApprovalSettingHint'),
                   },
                   {
                     key: 'require_manager_approval_refund',
-                    label: 'Require Manager Approval for Returns / Refunds',
-                    desc: 'Issuing cash refunds or credit notes requires manager PIN',
+                    label: t('pos.override.requireRefundApproval'),
+                    desc: t('pos.override.refundApprovalSettingHint'),
                   },
                   {
                     key: 'require_manager_approval_price_override',
-                    label: 'Require Manager Approval for Price Override',
-                    desc: 'Changing catalog item price directly in cart',
+                    label: t('pos.override.requirePriceApproval'),
+                    desc: t('pos.override.priceApprovalSettingHint'),
                   },
                 ].map((item) => {
                   const isChecked = Boolean(formData[item.key as keyof PosSettings]);

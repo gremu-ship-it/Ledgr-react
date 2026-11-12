@@ -169,6 +169,13 @@ async function setup() {
        array['MANUFACTURING']) as id`,
   )) as string;
 
+  // Manufacturing RPCs are Enterprise-entitled; provision an active synthetic
+  // entitlement so these tests exercise work-order behavior rather than billing gates.
+  await db.client.query(
+    "update public.businesses set plan_tier='enterprise', plan_expires_at='2099-01-01' where id=$1",
+    [M.id],
+  );
+
   await commitScalar(owner, 'select public.provision_manufacturing_defaults($1,$2)', [
     M.id,
     owner,

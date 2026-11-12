@@ -20,8 +20,15 @@ let skuCounter = 0;
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (error) { replayError = String((error as Error).message).startsWith('Migration ') ? (error as Error).message : safeError(error); return; }
-  try { orgs = await seedFixture(db.client); }
-  catch (error) { seedError = safeError(error); }
+  try {
+    orgs = await seedFixture(db.client);
+    // BOM RPC tests target Enterprise manufacturing tenants; keep shared
+    // cross-business fixtures entitled so failures exercise BOM boundaries.
+    await db.client.query(
+      "update public.businesses set plan_tier='enterprise', plan_expires_at='2099-01-01' where id = any($1::uuid[])",
+      [[orgs.A.business, orgs.B.business]],
+    );
+  } catch (error) { seedError = safeError(error); }
 });
 afterAll(async () => { if (db) await db.cleanup(); });
 
