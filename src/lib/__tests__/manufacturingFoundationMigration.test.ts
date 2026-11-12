@@ -33,7 +33,8 @@ describe('manufacturing foundation migration contract', () => {
     // POS register/shift, return, and Phase 6E-3 workflows; Partner Portal 6F-1/6F-2;
     // AI diagnostics and financial summaries; payroll leave/reversal; and public
     // grant hardening, followed by the employee-audit resource-id type fix,
-    // supervisor financial reads, and the journal reversal command.
+    // supervisor financial reads, the journal reversal command, stock-transfer
+    // UUID source-id repair, and cross-domain casting/reversal hardening.
     // Keep the migration head list below aligned with both lines.
     expect([
       '20261224000003',
@@ -81,6 +82,8 @@ describe('manufacturing foundation migration contract', () => {
       '20261222000000',
       '20261224000001',
       '20261224000002',
+      '20261224000003',
+      '20261224000004',
     ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);
