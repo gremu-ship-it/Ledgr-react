@@ -31,6 +31,7 @@ describe('manufacturing foundation migration contract', () => {
     // migration, then construction procurement links and Phase 5B-3a MRP, become
     // the current head.
     expect([
+      '20261224000003',
       '20261103000000',
       '20261104000000',
       '20261105000001',
