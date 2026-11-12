@@ -500,11 +500,28 @@
     "joinedAs": "Umejiunga kama {{role}}. Inakuelekeza kwenye dashibodi…",
     "theBusiness": "biashara",
     "member": "mwanachama"
-  }
-,
+  },
   "constructionSchedule": {
     "errors": {
       "invalidProgress": "Maendeleo lazima yawe nambari kamili kutoka 0 hadi 100."
     }
+  },
+  "payroll": {
+    "legacyHistoryTitle": "Historia ya awali ya mishahara",
+    "legacyHistoryDescription": "Mishahara iliyoundwa kabla ya sasisho imehifadhiwa hapa chini. Hapa inaweza kutazamwa tu.",
+    "legacyHistoryLoadFailed": "Imeshindwa kupakia historia ya awali ya mishahara.",
+    "legacyHistoryRunNumber": "Namba ya malipo",
+    "legacyHistoryPeriod": "Kipindi cha malipo",
+    "legacyHistoryPayDate": "Tarehe ya malipo",
+    "legacyHistoryGross": "Jumla kabla ya makato",
+    "legacyHistoryNet": "Jumla baada ya makato",
+    "legacyHistoryStatus": "Hali",
+    "legacyHistoryReadOnly": "Mishahara ya awali imehifadhiwa kama rekodi za kutazamwa tu.",
+    "noNewRunsLegacyAvailable": "Bado hakuna mishahara katika mzunguko mpya. Mishahara ya awali imeorodheshwa hapa chini.",
+    "employeeSaveFailed": "Imeshindwa kuhifadhi mfanyakazi. Tafadhali jaribu tena.",
+    "employeeSaveFailedWithCode": "Imeshindwa kuhifadhi mfanyakazi. Nambari ya rejea: {{code}}.",
+    "employeeSavePermissionDenied": "Akaunti yako haina ruhusa ya kuongeza wafanyakazi wa mishahara. Mwombe msimamizi wa biashara akague jukumu lako. Msimbo: {{code}}.",
+    "employeeSaveDuplicate": "Mfanyakazi mwenye nambari hii tayari yupo. Jaribu tena; ikiendelea, wasiliana na usaidizi. Msimbo: {{code}}.",
+    "employeeSaveInvalidData": "Thamani ya mishahara haikukubaliwa. Kagua mara za malipo, tarehe na mshahara, kisha ujaribu tena. Msimbo: {{code}}."
   }
 }

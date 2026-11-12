@@ -70,7 +70,7 @@ export function CommandPalette() {
       { id: 'qa-record-income', label: t('dashboard.recordIncome'), keywords: 'record income sale revenue quick', path: '/income?action=record', icon: DollarSign, group: 'Quick Actions' },
       { id: 'qa-record-expense', label: t('dashboard.recordExpense'), keywords: 'record expense cost quick', path: '/expenses?action=record', icon: Receipt, group: 'Quick Actions' },
       { id: 'qa-new-expense', label: 'New Expense Builder', keywords: 'expense builder detailed', path: '/expenses?action=expense', icon: Receipt, group: 'Quick Actions' },
-      { id: 'qa-run-payroll', label: t('dashboard.runPayroll'), keywords: 'payroll run employees', path: '/payroll?action=run', icon: Users, group: 'Quick Actions' },
+      { id: 'qa-run-payroll', label: t('payroll.title'), keywords: 'payroll employees', path: '/payroll/employees', icon: Users, group: 'Quick Actions' },
       { id: 'qa-reports', label: 'View Reports', keywords: 'reports analytics trial balance', path: '/reports/trial-balance', icon: BarChart2, group: 'Quick Actions' },
       { id: 'qa-settings', label: 'Settings', keywords: 'settings configuration billing', path: '/settings', icon: Settings, group: 'Quick Actions' },
       { id: 'qa-ai', label: 'Ask Ledgr AI', keywords: 'ai assistant help insights', path: '/ai', icon: Sparkles, group: 'Quick Actions' },

@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CurrentUser, BusinessMembership, Theme } from '@/types';
+import { clearQueryCacheImmediately } from '@/lib/queryCacheLifecycle';
+import {
+  clearPersistedCacheForIdentity,
+  setActivePersistedCacheIdentity,
+} from '@/lib/queryPersister';
 
 interface AppState {
   // ── Auth / session ──────────────────────────────────────────────
@@ -87,18 +92,45 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       currentUser: null,
       isAuthLoading: true,
-      setCurrentUser: (user) => set({ currentUser: user }),
+      setCurrentUser: (user) => {
+        const businessId = get().currentBusiness?.business.id ?? null;
+        setActivePersistedCacheIdentity(user?.id, businessId);
+        set({ currentUser: user });
+      },
       setAuthLoading: (loading) => set({ isAuthLoading: loading }),
 
       currentBusiness: null,
       businesses: [],
       isBusinessesLoading: true,
-      setCurrentBusiness: (membership) => set({ currentBusiness: membership }),
+      setCurrentBusiness: (membership) => {
+        const state = get();
+        const previousBusinessId = state.currentBusiness?.business.id;
+        const nextBusinessId = membership?.business.id;
+        if (previousBusinessId && previousBusinessId !== nextBusinessId) {
+          clearQueryCacheImmediately();
+          if (state.currentUser?.id) {
+            void clearPersistedCacheForIdentity(state.currentUser.id, previousBusinessId);
+          }
+        }
+        setActivePersistedCacheIdentity(state.currentUser?.id, nextBusinessId);
+        set({ currentBusiness: membership });
+      },
       setBusinesses: (memberships) => set({ businesses: memberships }),
       setBusinessesLoading: (loading) => set({ isBusinessesLoading: loading }),
       switchBusiness: (businessId) => {
-        const found = get().businesses.find((m) => m.business.id === businessId);
-        if (found) set({ currentBusiness: found });
+        const state = get();
+        const found = state.businesses.find((m) => m.business.id === businessId);
+        const previousBusinessId = state.currentBusiness?.business.id;
+        if (!found || found.business.id === previousBusinessId) return;
+
+        // Drop active tenant data synchronously before the new business scope
+        // can mount. Remove the matching persisted namespace as a second layer.
+        clearQueryCacheImmediately();
+        if (state.currentUser?.id && previousBusinessId) {
+          void clearPersistedCacheForIdentity(state.currentUser.id, previousBusinessId);
+        }
+        setActivePersistedCacheIdentity(state.currentUser?.id, found.business.id);
+        set({ currentBusiness: found });
       },
 
       sidebarOpen: getInitialSidebarOpen(),
@@ -148,13 +180,15 @@ export const useAppStore = create<AppState>()(
         set({ orientationLock: v });
       },
 
-      reset: () =>
+      reset: () => {
+        setActivePersistedCacheIdentity(null, null);
         set({
           currentUser: null,
           currentBusiness: null,
           businesses: [],
           isBusinessesLoading: true,
-        }),
+        });
+      },
     }),
     {
       name: 'ledgr-app-store',

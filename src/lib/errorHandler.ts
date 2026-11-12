@@ -407,5 +407,12 @@ export function getErrorMessage(error: unknown): string {
     return error;
   }
 
+  // Supabase/PostgREST errors are plain objects, not always `Error` instances.
+  // Stringifying one produces the useless "[object Object]" seen in UI alerts.
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+
   return 'An unexpected error occurred.';
 }

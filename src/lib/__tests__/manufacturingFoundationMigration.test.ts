@@ -37,6 +37,7 @@ describe('manufacturing foundation migration contract', () => {
     // UUID source-id repair, and cross-domain casting/reversal hardening.
     // Keep the migration head list below aligned with both lines.
     expect([
+      '20261224000003',
       '20261103000000',
       '20261104000000',
       '20261105000001',

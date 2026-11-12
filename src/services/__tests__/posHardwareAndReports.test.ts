@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EscPosBuilder } from '@/lib/pos/escpos';
 import { encodeCode128B, getBarcodeData } from '@/lib/pos/barcodeGenerator';
 import { generateZReportSummary, formatZReportEmailBody } from '@/services/posReportService';
-import type { PosShift, PosSale } from '@/types/pos';
+import type { PosShift } from '@/types/pos';
 
 describe('POS Hardware & Advanced Features', () => {
   describe('ESC/POS Protocol Builder', () => {
@@ -85,27 +85,32 @@ describe('POS Hardware & Advanced Features', () => {
       notes: 'Clean shift',
     };
 
-    const mockSales: PosSale[] = [
-      {
-        id: 'sale-1',
-        gross_amount: 60000,
-        discount_amount: 5000,
-        net_amount: 55000,
-        tax_amount: 0,
-        status: 'completed',
-      },
-      {
-        id: 'sale-2',
-        gross_amount: 45000,
-        discount_amount: 0,
-        net_amount: 45000,
-        tax_amount: 0,
-        status: 'completed',
-      },
-    ];
+    const mockReport = {
+      shift_id: mockShift.id,
+      business_id: mockShift.business_id,
+      cashier_name: mockShift.cashier_name,
+      opened_at: mockShift.opened_at,
+      closed_at: mockShift.closed_at,
+      gross_sales: 105000,
+      discount_total: 5000,
+      net_sales: 100000,
+      tax_total: 0,
+      tax_breakdown: {},
+      sales_count: 2,
+      return_count: 0,
+      refunds_gross_total: 0,
+      tender_breakdown: { cash: 100000 },
+      tender_counts: { cash: { count: 2, total: 100000 } },
+      cash_in_total: 0,
+      cash_out_total: 0,
+      expected_cash: 125000,
+      actual_cash: 125000,
+      variance: 0,
+      close: { report_number: 'Z-2026-7', closed_at: mockShift.closed_at },
+    };
 
-    it('calculates accurate financial and drawer totals for Z-Report', () => {
-      const summary = generateZReportSummary(mockShift, mockSales, 'Chikondi Store', 'Lilongwe Branch');
+    it('maps financial and drawer totals from the server shift report', () => {
+      const summary = generateZReportSummary(mockShift, mockReport, 'Chikondi Store', 'Lilongwe Branch');
 
       expect(summary.grossSales).toBe(105000);
       expect(summary.discountsTotal).toBe(5000);
@@ -114,10 +119,17 @@ describe('POS Hardware & Advanced Features', () => {
       expect(summary.actualCountedCash).toBe(125000);
       expect(summary.cashVariance).toBe(0);
       expect(summary.varianceStatus).toBe('balanced');
+      expect(summary.transactionsCount).toBe(2);
+      expect(summary.paymentBreakdown.cash).toEqual({ count: 2, total: 100000 });
+    });
+
+    it('rejects a report for a different shift instead of accepting unrelated sales', () => {
+      expect(() => generateZReportSummary(mockShift, { ...mockReport, shift_id: 'other-shift' }))
+        .toThrow(/does not match/);
     });
 
     it('formats plain text email body for owner notification', () => {
-      const summary = generateZReportSummary(mockShift, mockSales, 'Chikondi Store', 'Lilongwe Branch');
+      const summary = generateZReportSummary(mockShift, mockReport, 'Chikondi Store', 'Lilongwe Branch');
       const emailText = formatZReportEmailBody(summary);
 
       expect(emailText).toContain('END-OF-DAY POS Z-REPORT');

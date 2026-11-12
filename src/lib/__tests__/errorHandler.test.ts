@@ -144,6 +144,17 @@ describe('getErrorMessage', () => {
     expect(message).toContain('Network error');
   });
 
+  it('extracts the message from plain PostgREST errors instead of stringifying them', () => {
+    const message = getErrorMessage({
+      code: '23502',
+      message: 'null value in column "code" violates not-null constraint',
+      details: 'Failing row contains ...',
+    });
+
+    expect(message).toBe('null value in column "code" violates not-null constraint');
+    expect(message).not.toBe('[object Object]');
+  });
+
   it('should handle string errors', () => {
     const message = getErrorMessage('something went wrong');
     expect(message).toBe('something went wrong');

@@ -10,6 +10,7 @@ import { repos } from '@/lib/repositories';
 import { realSupabase } from '@/lib/supabase';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { usageService } from '@/lib/billing/UsageService';
+import { setDemoMode } from '@/lib/demo/mode';
 import { deriveClientKey } from '@/lib/clientKeys';
 import type { PosCartItem } from '@/types/pos';
 import { missingPostPosSale } from './helpers/postPosSaleStub';
@@ -173,9 +174,9 @@ describe('commitPosSaleDocuments', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    // The client-side path is the fallback: it runs when post_pos_sale is not
-    // applied yet (stage 2 of docs/database/pos-sale-posting-rpc.md). These tests
-    // are about that path, so the RPC is stubbed as missing.
+    setDemoMode(true);
+    // Exercise the explicit demo materializer; production checkout/replay stays
+    // on the plan-gated RPC and does not use a weaker fallback.
     vi.spyOn(realSupabase, 'rpc').mockImplementation(
       missingPostPosSale(() => ({ data: null, error: null })) as never,
     );

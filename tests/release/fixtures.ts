@@ -92,7 +92,7 @@ export async function seedFixture(client: { query: (sql: string, values?: unknow
     const product = await insertId("insert into public.products(business_id,name,sku,sale_price,purchase_price,currency,product_type,track_inventory,sales_tax_code,purchase_tax_code) values($1,'R13 item',$2,1500,900,'MWK','product',true,'none','none') returning id", [business, `R13-${org}`]);
     await client.query('insert into public.inventory_balances(business_id,product_id,location_id,quantity_on_hand,quantity_reserved,average_cost) values($1,$2,$3,100,0,900)', [business, product, location]);
     const shift = await insertId("insert into public.pos_shifts(business_id,cashier_id,cashier_name,opening_cash,status,branch_id) values($1,$2,'R13 cashier',50000,'open',$3) returning id", [business, identities[`${org}_cashier`].id, branch]);
-    const terminal = await insertId("insert into public.pos_terminals(business_id,name,branch_id) values($1,'R13 Till 1',$2) returning id", [business, branch]);
+    const terminal = await insertId("insert into public.pos_terminals(business_id,name,branch_id,code) values($1,'R13 Till 1',$2,'R13-TILL-1') returning id", [business, branch]);
     await client.query("insert into storage.objects(bucket_id,name) values('business-logos',$1)", [`${business}/r13-logo.png`]);
     await client.query("insert into public.subscription_payments(business_id,tx_ref,target_plan_tier,billing_cycle,amount,currency,plan_expires_at,initiated_by) values($1,$2,'growth','monthly',100000,'MWK','2099-01-01',$3)",[business,`r13-payment-${org}`,owner.id]);
     orgs[org] = { business, customer, product, branch, branch2, location, shift, terminal };
@@ -133,4 +133,14 @@ export function correctionFixtures(c: SaleContext, originalInvoiceId: string) {
     items:[{productId:c.product,productName:'R13 item',quantity:1,unitPrice:expected.sale,refundAmount:expected.sale}],totalRefund:expected.sale};
   const voidSale: import('../../src/types/pos').PosVoidPayload={...common,invoiceId:originalInvoiceId};
   return {refund,voidSale,expected:{refund:1500,stockRestored:1,originalCostRestored:900,netSaleAfterFullReversal:0}};
+}
+
+/** Mark only POS-facing release fixtures as retail businesses; other suites keep the creation default. */
+export async function enableRetailModel(client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }, orgs: Record<string, SaleContext>, planTier?: 'free' | 'starter' | 'growth' | 'pro' | 'enterprise') {
+  for (const org of Object.values(orgs)) {
+    await client.query(
+      "update public.businesses set operating_models=ARRAY['RETAIL']::text[], plan_tier=coalesce($2, plan_tier), plan_expires_at=case when $2 is null then plan_expires_at else '2099-01-01'::date end where id=$1",
+      [org.business, planTier ?? null],
+    );
+  }
 }

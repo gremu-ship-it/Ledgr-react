@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Factory, RefreshCw } from 'lucide-react';
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Factory, Package, Plus, RefreshCw } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { getManufacturingDashboard, type DashboardRange } from '@/dal/repositories/ManufacturingDashboardRepository';
 import { pushError } from '@/lib/notifications';
@@ -249,6 +249,24 @@ function ManufacturingDashboardPageContent() {
           ) : null}
         </div>
       </header>
+
+      <section aria-label={t(`${tPrefix}.quickActions`)} className="rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:p-5">
+        <h2 className="mb-3 text-sm font-semibold text-gray-800">{t(`${tPrefix}.quickActions`)}</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Link to="/manufacturing/production/new" className="flex min-h-12 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+            <Plus className="h-4 w-4 text-brand-700" aria-hidden="true" />
+            {t(`${tPrefix}.createWorkOrderAction`)}
+          </Link>
+          <Link to="/manufacturing/bom/new" className="flex min-h-12 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+            <Factory className="h-4 w-4 text-brand-700" aria-hidden="true" />
+            {t(`${tPrefix}.defineBillOfMaterialsAction`)}
+          </Link>
+          <Link to="/warehouse" className="flex min-h-12 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+            <Package className="h-4 w-4 text-brand-700" aria-hidden="true" />
+            {t(`${tPrefix}.viewInventoryStockAction`)}
+          </Link>
+        </div>
+      </section>
 
       <section aria-label={t(`${tPrefix}.summary`)} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title={t(`${tPrefix}.activeWorkOrders`)} value={formatQuantity(metrics?.active_work_orders)} href="/manufacturing/production?status=in_progress" detail={t(`${tPrefix}.openWorkOrders`)} />

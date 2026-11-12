@@ -179,7 +179,7 @@ type PublicViews = Database['public']['Views']
 
 /** Writable tables only — views have no Insert/Update. */
 export type TableName = keyof PublicTables
-/** Read-only views (v_ar_ageing, v_asset_register, v_cash_flow, v_reorder_alerts, v_trial_balance, v_partner_client_usage). */
+/** Read-only views (v_ar_ageing, v_asset_register, v_cash_flow, v_reorder_alerts, v_trial_balance, v_partner_client_usage, v_partner_peer_businesses). */
 export type ViewName = keyof PublicViews
 
 /** Row works for both tables and views, since views are read-only but still queryable. */
