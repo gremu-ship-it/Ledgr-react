@@ -36,6 +36,7 @@ describe('manufacturing foundation migration contract', () => {
     // supervisor financial reads, and the journal reversal command.
     // Keep the migration head list below aligned with both lines.
     expect([
+      '20261224000003',
       '20261103000000',
       '20261104000000',
       '20261105000001',
