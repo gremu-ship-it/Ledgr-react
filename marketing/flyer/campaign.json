@@ -1,0 +1,18 @@
+{
+  "brand": "LEDGR",
+  "tagline": "Smarter Business. Greater Growth.",
+  "positioning": "One Platform. Complete Business Visibility. Smarter Decisions.",
+  "contact": { "phone": "0881 444 487", "email": "gremu.consultancy@gmail.com" },
+  "modules": [
+    { "title": "Finance & Accounting", "description": "Income, expenses, invoices & financial reports." },
+    { "title": "Sales & POS", "description": "Record sales, POS activity and invoices." },
+    { "title": "Inventory & Stock", "description": "Track products, warehouses and stock transfers." },
+    { "title": "Purchasing & Contacts", "description": "Supplier contacts; procurement is within Construction." },
+    { "title": "Branches & Operations", "description": "Organise branches, locations, sites and teams." },
+    { "title": "Construction & Projects", "description": "Project procurement, receiving & site materials." },
+    { "title": "Ledgr AI", "description": "Insights & forecasting on eligible plans." }
+  ],
+  "benefits": ["Better business visibility", "Improved operational control", "Organised financial records", "Smarter management decisions", "Connected business information"],
+  "cta": "Book a FREE Ledgr Demonstration",
+  "finePrint": "Modules and access depend on plan and business configuration. Purchasing is provided within Construction; not a standalone purchasing module."
+}

@@ -1,0 +1,65 @@
+<!-- LEDGR Campaign editable SVG template. Text and shapes are native SVG elements. -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1350" viewBox="0 0 1080 1350">
+<defs>
+ <linearGradient id="navy" x2="1" y2="1"><stop stop-color="#0B1730"/><stop offset="1" stop-color="#142B50"/></linearGradient>
+ <linearGradient id="gold" x2="1" y2="1"><stop stop-color="#FFD75C"/><stop offset="1" stop-color="#F2B93E"/></linearGradient>
+ <linearGradient id="glow" x2="0" y2="1"><stop stop-color="#294975"/><stop offset="1" stop-color="#172B4C"/></linearGradient>
+ <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="12" stdDeviation="13" flood-color="#102344" flood-opacity=".14"/></filter>
+ <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M36 0H0V36" fill="none" stroke="#ffffff" stroke-opacity=".045" stroke-width="1"/></pattern>
+</defs>
+<rect width="1080" height="1350" fill="#F3F6FA"/>
+<!-- Deep navy hero -->
+<path d="M0 0H1080V575Q1080 597 1080 597H0Z" fill="url(#gold)"/>
+<rect width="1080" height="575" fill="url(#grid)"/>
+<circle cx="" cy="" r="" fill="#315587" opacity=".19"/>
+<g transform="translate(70 38)">
+ <rect width="54" height="54" rx="16" fill="url(#gold)"/>
+ <path d="M18 14h7v25h17v7H18z" fill="#102344"/>
+ <text x="70" y="35" font-family="Inter,Arial,sans-serif" font-size="35" font-weight="800" letter-spacing="2.1" fill="#102344">LEDGR</text>
+ <text x="1010" y="31" text-anchor="end" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="600" fill="#33445D">Smarter Business. Greater Growth.</text>
+ <text x="0" y="108" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="800" letter-spacing="2.4" fill="#102344">ONE PLATFORM. COMPLETE BUSINESS VISIBILITY.</text>
+ <text x="0" y="170" font-family="Inter,Arial,sans-serif" font-size="50" font-weight="850" letter-spacing="-1.2" fill="#102344">ONE PLATFORM.</text>
+ <text x="0" y="220" font-family="Inter,Arial,sans-serif" font-size="50" font-weight="850" letter-spacing="-1.2" fill="#102344">MULTIPLE WAYS TO</text>
+ <text x="0" y="270" font-family="Inter,Arial,sans-serif" font-size="50" font-weight="850" letter-spacing="-1.2" fill="#102344">RUN YOUR BUSINESS.</text>
+ <text x="0" y="310" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="450" fill="#33445D">Manage finances, sales, stock and operations in one connected system.</text>
+ <!-- illustrative product panel: explicitly conceptual, not screenshot -->
+ <g transform="translate(70 325)" filter="url(#shadow)" opacity="1">
+  <rect width="940" height="265" rx="20" fill="#fff"/>
+  <path d="M20 0h900a20 20 0 0 1 20 20v35H0V20A20 20 0 0 1 20 0" fill="#F8FAFD"/>
+  <circle cx="24" cy="28" r="5" fill="#E9B844"/><text x="39" y="33" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700" fill="#233650">BUSINESS OVERVIEW</text>
+  <text x="920" y="33" text-anchor="end" font-family="Inter,Arial,sans-serif" font-size="10" font-weight="600" fill="#8794A7">ILLUSTRATIVE VIEW</text>
+  <rect x="22" y="73" width="290" height="78" rx="10" fill="#F5F7FA"/><rect x="324" y="73" width="290" height="78" rx="10" fill="#F5F7FA"/><rect x="624" y="73" width="290" height="78" rx="10" fill="#F5F7FA"/>
+  <text x="35" y="98" font-family="Inter,Arial,sans-serif" font-size="10" fill="#758398">INCOME</text><text x="35" y="124" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="800" fill="#102344">MWK 8.4m</text>
+  <text x="336" y="98" font-family="Inter,Arial,sans-serif" font-size="10" fill="#758398">EXPENSES</text><text x="336" y="124" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="800" fill="#102344">MWK 3.1m</text>
+  <text x="636" y="98" font-family="Inter,Arial,sans-serif" font-size="10" fill="#758398">INVOICES</text><text x="636" y="124" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="800" fill="#102344">24 open</text>
+  <text x="24" y="170" font-family="Inter,Arial,sans-serif" font-size="11" font-weight="700" fill="#263953">Income &amp; expenses</text>
+  <g stroke="#E9EDF2" stroke-width="1"><path d="M25 195H916M25 220H916M25 245H916"/></g>
+  <path d="M45 246 L140 230 L235 239 L330 210 L425 218" fill="none" stroke="#E5B543" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M45 258 L140 250 L235 255 L330 244 L425 247" fill="none" stroke="#4E80B8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#E5B543"><circle cx="140" cy="230" r="4"/><circle cx="330" cy="210" r="4"/><circle cx="425" cy="218" r="4"/></g>
+  <rect x="24" y="185" width="250" height="30" rx="15" fill="#FFF5D9"/><text x="145" y="204" font-family="Inter,Arial,sans-serif" font-size="11" font-weight="700" fill="#875E0C">One platform · Connected operations</text>
+ </g>
+</g>
+<!-- Platform modules -->
+<text x="70" y="670" font-family="Inter,Arial,sans-serif" font-size="28" font-weight="800" fill="#142443">ONE PLATFORM. BUILT AROUND YOUR BUSINESS.</text>
+<text x="70" y="704" font-family="Inter,Arial,sans-serif" font-size="13" fill="#67768B">A modular system for businesses and organisations at every stage.</text>
+<g filter="url(#shadow)"><rect x="70" y="732" width="466.5" height="58" rx="12" fill="#fff"/><rect x="83" y="747" width="34" height="34" rx="10" fill="#FFF4D1"/><text x="100" y="770" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="#926B16">₭</text><text x="127" y="762" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="750" fill="#142443">Finance &amp; Accounting</text><text x="127" y="784" font-family="Inter,Arial,sans-serif" font-size="12" fill="#66768B">Income, expenses, invoices &amp; financial reports.</text></g><g filter="url(#shadow)"><rect x="543.5" y="732" width="466.5" height="58" rx="12" fill="#fff"/><rect x="556.5" y="747" width="34" height="34" rx="10" fill="#FFF4D1"/><text x="573.5" y="770" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="#926B16">↗</text><text x="600.5" y="762" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="750" fill="#142443">Sales &amp; POS</text><text x="600.5" y="784" font-family="Inter,Arial,sans-serif" font-size="12" fill="#66768B">Record sales, POS activity and invoices.</text></g><g filter="url(#shadow)"><rect x="70" y="797" width="466.5" height="58" rx="12" fill="#fff"/><rect x="83" y="812" width="34" height="34" rx="10" fill="#FFF4D1"/><text x="100" y="835" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="#926B16">▤</text><text x="127" y="827" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="750" fill="#142443">Inventory &amp; Stock</text><text x="127" y="849" font-family="Inter,Arial,sans-serif" font-size="12" fill="#66768B">Track products, warehouses and stock transfers.</text></g><g filter="url(#shadow)"><rect x="543.5" y="797" width="466.5" height="58" rx="12" fill="#fff"/><rect x="556.5" y="812" width="34" height="34" rx="10" fill="#FFF4D1"/><text x="573.5" y="835" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="#926B16">◎</text><text x="600.5" y="827" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="750" fill="#142443">Purchasing &amp; Contacts</text><text x="600.5" y="849" font-family="Inter,Arial,sans-serif" font-size="12" fill="#66768B">Supplier contacts; procurement is within Construction.</text></g><g filter="url(#shadow)"><rect x="70" y="862" width="466.5" height="58" rx="12" fill="#fff"/><rect x="83" y="877" width="34" height="34" rx="10" fill="#FFF4D1"/><text x="100" y="900" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="#926B16">⌂</text><text x="127" y="892" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="750" fill="#142443">Branches &amp; Operations</text><text x="127" y="914" font-family="Inter,Arial,sans-serif" font-size="12" fill="#66768B">Organise branches, locations, sites and teams.</text></g><g filter="url(#shadow)"><rect x="543.5" y="862" width="466.5" height="58" rx="12" fill="#fff"/><rect x="556.5" y="877" width="34" height="34" rx="10" fill="#FFF4D1"/><text x="573.5" y="900" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="#926B16">⌁</text><text x="600.5" y="892" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="750" fill="#142443">Construction &amp; Projects</text><text x="600.5" y="914" font-family="Inter,Arial,sans-serif" font-size="12" fill="#66768B">Project procurement, receiving &amp; site materials.</text></g><g filter="url(#shadow)"><rect x="70" y="927" width="466.5" height="58" rx="12" fill="#fff"/><rect x="83" y="942" width="34" height="34" rx="10" fill="#FFF4D1"/><text x="100" y="965" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="#926B16">✦</text><text x="127" y="957" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="750" fill="#142443">Ledgr AI</text><text x="127" y="979" font-family="Inter,Arial,sans-serif" font-size="12" fill="#66768B">Insights &amp; forecasting on eligible plans.</text></g>
+<!-- benefits -->
+<rect x="70" y="1000" width="940" height="110" rx="18" fill="#E8EDF4"/>
+<text x="92" y="1028" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="800" fill="#142443">WHY BUSINESSES CHOOSE LEDGR</text>
+<circle cx="92" cy="1062" r="4" fill="#E7B441"/><text x="105" y="1067" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="650" fill="#32435B">Better business visibility</text><circle cx="407" cy="1062" r="4" fill="#E7B441"/><text x="420" y="1067" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="650" fill="#32435B">Improved operational control</text><circle cx="722" cy="1062" r="4" fill="#E7B441"/><text x="735" y="1067" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="650" fill="#32435B">Organised financial records</text><circle cx="92" cy="1092" r="4" fill="#E7B441"/><text x="105" y="1097" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="650" fill="#32435B">Smarter management decisions</text><circle cx="407" cy="1092" r="4" fill="#E7B441"/><text x="420" y="1097" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="650" fill="#32435B">Connected business information</text>
+<!-- CTA/footer -->
+<rect x="0" y="1122" width="1080" height="228" fill="url(#navy)"/>
+<rect x="0" y="1122" width="1080" height="228" fill="url(#grid)"/>
+<text x="70" y="1160" font-family="Inter,Arial,sans-serif" font-size="25" font-weight="850" fill="#fff">TAKE CONTROL OF YOUR</text>
+<text x="70" y="1191" font-family="Inter,Arial,sans-serif" font-size="25" font-weight="850" fill="#FFD45B">BUSINESS TODAY.</text>
+<rect x="70" y="1203" width="360" height="40" rx="14" fill="url(#gold)"/>
+<text x="250" y="1230" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="800" fill="#172540">Book a FREE Ledgr Demonstration</text>
+<text x="70" y="1260" font-family="Inter,Arial,sans-serif" font-size="12" fill="#D8E1ED">Discover how Ledgr can simplify your business operations.</text>
+<path d="M70 1275H1010" stroke="#FFFFFF" stroke-opacity=".22"/>
+<text x="70" y="1299" font-family="Inter,Arial,sans-serif" font-size="12" font-weight="700" fill="#fff">CALL / WHATSAPP</text>
+<text x="215" y="1299" font-family="Inter,Arial,sans-serif" font-size="12" fill="#fff">0881 444 487</text>
+<text x="70" y="1322" font-family="Inter,Arial,sans-serif" font-size="12" font-weight="700" fill="#fff">EMAIL</text>
+<text x="124" y="1322" font-family="Inter,Arial,sans-serif" font-size="12" fill="#fff">gremu.consultancy@gmail.com</text>
+<text x="70" y="1336" opacity="0" font-family="Inter,Arial,sans-serif" font-size="13" fill="#91A1B7">LEDGR  ·  ONE PLATFORM. COMPLETE BUSINESS VISIBILITY. SMARTER DECISIONS.</text>
+</svg>
