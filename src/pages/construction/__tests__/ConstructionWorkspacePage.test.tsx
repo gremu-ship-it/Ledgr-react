@@ -64,9 +64,29 @@ const construction = vi.hoisted(() => ({
   findReceiptLinesForBusiness: vi.fn(),
 }));
 
+/**
+ * `PurchaseOrderDetail` reads `repos.approval.requiresApproval` and the
+ * `ApprovalBanner` it renders reads `repos.approval.getState`. They are not part
+ * of the construction commands these tests exercise, but leaving `repos.approval`
+ * undefined makes both queries throw inside their query functions instead of
+ * resolving to "no workflow configured".
+ */
+const approval = vi.hoisted(() => ({
+  requiresApproval: vi.fn(),
+  getState: vi.fn(),
+  start: vi.fn(),
+  act: vi.fn(),
+  resubmit: vi.fn(),
+  getWorkflows: vi.fn(),
+  getWorkflow: vi.fn(),
+  saveWorkflow: vi.fn(),
+  getPendingRequests: vi.fn(),
+}));
+
 vi.mock('@/lib/repositories', () => ({
   repos: {
     construction,
+    approval,
     contact: { findByBusiness: vi.fn(async () => []) },
     branch: { findByBusiness: vi.fn(async () => []), findLocations: vi.fn(async () => []) },
     inventory: { findAllProducts: vi.fn(async () => []), findBalancesByLocation: vi.fn(async () => []) },
@@ -156,6 +176,12 @@ function renderWorkspace(entry = '/construction') {
 beforeEach(() => {
   void i18n.changeLanguage('en');
   Object.values(construction).forEach((mock) => mock.mockReset());
+  // No approval workflow is configured for these synthetic businesses: the
+  // purchase-order detail reads the requirement and the banner reads its state.
+  Object.values(approval).forEach((mock) => mock.mockReset());
+  approval.requiresApproval.mockResolvedValue(false);
+  approval.getState.mockResolvedValue({ requires_approval: false, request: null, history: [] });
+  approval.start.mockResolvedValue({ required: false, status: 'not_required' });
   construction.findCapabilities.mockResolvedValue([]);
   construction.findOpenItems.mockResolvedValue(OPEN_ITEMS);
   construction.findPurchaseOrders.mockResolvedValue([]);
