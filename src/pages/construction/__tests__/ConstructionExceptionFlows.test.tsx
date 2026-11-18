@@ -66,6 +66,26 @@ const construction = vi.hoisted(() => ({
   findCostBasesForReceiptLine: vi.fn(),
 }));
 
+/**
+ * The approval repository is not part of this screen's own commands, but
+ * `PurchaseOrderDetail` reads `requiresApproval` and the `ApprovalBanner` it
+ * renders reads `getState`. Leaving them out makes `repos.approval` undefined,
+ * so those two queries throw inside their query functions instead of resolving
+ * to "no workflow configured" — noise that hides the real assertion when the
+ * detail card fails to render.
+ */
+const approval = vi.hoisted(() => ({
+  requiresApproval: vi.fn(),
+  getState: vi.fn(),
+  start: vi.fn(),
+  act: vi.fn(),
+  resubmit: vi.fn(),
+  getWorkflows: vi.fn(),
+  getWorkflow: vi.fn(),
+  saveWorkflow: vi.fn(),
+  getPendingRequests: vi.fn(),
+}));
+
 const productList = vi.hoisted(() => ({ value: [] as Array<Record<string, unknown>> }));
 const contactList = vi.hoisted(() => ({ value: [] as Array<Record<string, unknown>> }));
 const expenseList = vi.hoisted(() => ({ value: [] as Array<Record<string, unknown>> }));
@@ -73,6 +93,7 @@ const expenseList = vi.hoisted(() => ({ value: [] as Array<Record<string, unknow
 vi.mock('@/lib/repositories', () => ({
   repos: {
     construction,
+    approval,
     contact: { findByBusiness: vi.fn(async () => contactList.value) },
     branch: { findByBusiness: vi.fn(async () => []), findLocations: vi.fn(async () => []) },
     inventory: {
@@ -202,9 +223,22 @@ function renderWorkspace(entry: string) {
   return render(<ConstructionWorkspacePage />, { wrapper: Wrapper });
 }
 
-beforeEach(() => {
-  void i18n.changeLanguage('en');
+/**
+ * How long a screen gets to appear. Comfortably above the 1s default (slow CI
+ * workers) and below the 5s per-test timeout, so a missing screen fails with
+ * "unable to find" rather than a bare "test timed out".
+ */
+const UI_TIMEOUT = 3_000;
+
+async function beforeEachDefaults() {
+  // Awaited: the button is found by its English accessible name, so the
+  // language must be settled before the first render.
+  await i18n.changeLanguage('en');
   Object.values(construction).forEach((mock) => mock.mockReset());
+  Object.values(approval).forEach((mock) => mock.mockReset());
+  approval.requiresApproval.mockResolvedValue(false);
+  approval.getState.mockResolvedValue({ requires_approval: false, request: null, history: [] });
+  approval.start.mockResolvedValue({ required: false, status: 'not_required' });
   construction.findCapabilities.mockResolvedValue([]);
   construction.findOpenItems.mockResolvedValue(null);
   construction.findPurchaseOrders.mockResolvedValue([]);
@@ -232,20 +266,42 @@ beforeEach(() => {
     currentUser: { id: 'user-1', email: 'owner@example.com' },
     currentBusiness: { role: 'owner', business: { id: BUSINESS_ID, name: 'Business A', base_currency: 'MWK' } } as never,
   });
-});
+}
+
+beforeEach(beforeEachDefaults);
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-/** Opens the purchase-order detail and the duplicate-note form. */
+/**
+ * Opens the purchase-order detail and the duplicate-note form.
+ *
+ * `PurchaseOrderDetail` fires its reads in one `Promise.all` — the purchase
+ * orders (the `?po=po-1` record itself), its lines, its events, sites, the
+ * business-wide delivery notes, receipts, products and contacts, plus the
+ * approval requirement and banner state. All of them therefore have to be
+ * answered before the detail card can render; the PO has to be present in that
+ * list or `?po=po-1` resolves to no record and the card is replaced by a
+ * "not visible" banner. The list is primed here; the rest keep the defaults set
+ * in `beforeEach` unless the test has already overridden them (notably
+ * `findDeliveryNotes`, which feeds the exception candidate picker).
+ */
 async function openDeliveryNoteException() {
   construction.findPurchaseOrders.mockResolvedValue([PO]);
   construction.findPurchaseOrderLines.mockResolvedValue(PO_LINES);
   renderWorkspace('/construction/purchase-orders?po=po-1');
-  const trigger = await screen.findByRole('button', { name: /Record duplicate note \(exception\)/i });
-  return trigger;
+
+  // Wait for the detail card itself first: if a read is missing or rejects, the
+  // failure names the screen that did not render instead of surfacing as a
+  // button timeout with no context.
+  await screen.findByRole('heading', { name: /Purchase order PO-000001/i }, { timeout: UI_TIMEOUT });
+  return screen.findByRole(
+    'button',
+    { name: /Record duplicate note \(exception\)/i },
+    { timeout: UI_TIMEOUT },
+  );
 }
 
 describe('delivery-note exception screen', () => {
@@ -416,8 +472,11 @@ describe('supplier-reference exception screen', () => {
     expenseList.value = [BILL];
     construction.findSupplierInvoiceReferences.mockResolvedValue(references);
     renderWorkspace('/construction/bill-matching');
-    const trigger = await screen.findByRole('button', { name: /Duplicate reference\? Record an exception/i });
-    return trigger;
+    return screen.findByRole(
+      'button',
+      { name: /Duplicate reference\? Record an exception/i },
+      { timeout: UI_TIMEOUT },
+    );
   }
 
   it('records the exception against the conflicting registration for the same supplier', async () => {
