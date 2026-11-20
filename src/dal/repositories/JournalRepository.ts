@@ -130,25 +130,44 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       );
     }
 
-    const createdEntry = await this.create(entry);
+    // The ledger is command-only for every application role
+    // (`journal_entries_command_insert` is `WITH CHECK (false)`), so a client
+    // insert is refused no matter who is signed in — the "new row violates
+    // row-level security policy for table \"journal_entries\"" error. The
+    // SECURITY DEFINER command re-checks authority, balance, accounts and the
+    // period lock, and is the only client-reachable write path.
+    const { data: entryId, error } = await this.client.rpc('post_financial_journal', {
+      p_business_id: entry.business_id,
+      p_entry_date: entry.entry_date,
+      p_description: entry.description,
+      p_reference: entry.reference ?? null,
+      p_source_type: entry.source_type ?? 'manual',
+      p_source_id: entry.source_id ?? null,
+      p_lines: lines.map((line) => ({
+        account_id: line.account_id,
+        is_debit: line.is_debit,
+        amount: Number(line.amount),
+        amount_base: Number(line.amount_base),
+        description: line.description ?? null,
+        tax_code: line.tax_code ?? 'none',
+        tax_amount: Number(line.tax_amount ?? 0),
+      })) as unknown as Json,
+      p_currency: entry.currency ?? null,
+      p_exchange_rate: entry.exchange_rate ?? null,
+      p_branch_id: entry.branch_id ?? null,
+      p_department_id: entry.department_id ?? null,
+      // Header drafts stay drafts: posting is an explicit, auditable transition.
+      p_status: 'draft',
+      p_entry_number: entry.entry_number ?? null,
+      p_posting_key: entry.posting_key ?? null,
+    });
 
-    const lineRows: InsertDto<'journal_lines'>[] = lines.map((line) => ({
-      ...line,
-      journal_entry_id: createdEntry.id,
-      business_id: createdEntry.business_id,
-    }));
-
-    const { data, error } = await this.client
-      .from('journal_lines')
-      .insert(lineRows as never)
-      .select('*');
-
-    if (error) {
-      await this.client.from('journal_entries').delete().eq('id', createdEntry.id);
-      throw toRepositoryError('journal_entries', error);
+    if (error) throw toRepositoryError('journal_entries', error);
+    if (!entryId) {
+      throw new ValidationError('journal_entries', 'The posting command returned no journal entry.');
     }
 
-    return { entry: createdEntry, lines: data ?? [] };
+    return this.findByIdWithLines(entryId as string);
   }
 
   /**
@@ -169,46 +188,18 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
    * @throws {NotFoundError} If no entry with the given id exists.
    */
   async post(id: string, postedBy: string | null): Promise<Row<'journal_entries'>> {
-    // PERF fast path: a single conditional UPDATE enforces the draft→posted
-    // transition atomically. The previous implementation read the row first
-    // and then updated it — two sequential round trips on every transaction
-    // save (invoice, expense, payroll, COGS posting).
-    const { data, error } = await this.client
-      .from('journal_entries')
-      .update({
-        status: 'posted',
-        posted_by: postedBy,
-        posted_at: new Date().toISOString(),
-      })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- known columns on journal_entries
-      .eq('id' as any, id)
-      .eq('status', 'draft')
-      .select('*')
-      .maybeSingle();
+    // The draft→posted transition is a command too: the command-only UPDATE
+    // policy refuses a direct `update journal_entries set status='posted'`, and
+    // the server is where the "only a draft may be posted" rule belongs because
+    // it holds the row lock. Period locks (trg_aa_period_lock) fire here.
+    const { error } = await this.client.rpc('post_draft_financial_journal', {
+      p_entry_id: id,
+      p_posted_by: postedBy,
+    });
 
     if (error) throw toRepositoryError('journal_entries', error);
-    if (data) return data as Row<'journal_entries'>;
 
-    // Nothing matched: the entry is missing/unreadable, not in draft, or was
-    // concurrently posted. Fall back to the read-based path for a precise
-    // error (rare — one extra round trip only on the failure path).
-    const current = await this.findById(id);
-
-    // FIX: guard against posting a non-draft entry
-    if (current.status !== 'draft') {
-      throw new ValidationError(
-        'journal_entries',
-        `Cannot post journal entry ${id}: current status is '${current.status}'. ` +
-        `Only 'draft' entries may be posted. To correct a posted entry, create a reversal.`,
-      );
-    }
-
-    // Readable and still 'draft' here means a concurrent writer posted it
-    // between our conditional update and this read (or the write was denied).
-    throw new ValidationError(
-      'journal_entries',
-      `Cannot post journal entry ${id}: it was just posted by another session. Refresh to see its current status.`,
-    );
+    return this.findById(id);
   }
 
   /**
@@ -446,40 +437,16 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     branchId: string | null,
     departmentId: string | null,
   ): Promise<void> {
-    const entry = await this.findById(entryId);
-    const assignment = { branch_id: branchId, department_id: departmentId };
+    // Same command-only rule as posting: the browser cannot UPDATE a journal, so
+    // the server applies the change to the entry, every line and the document
+    // that produced it — tenant-scoped, authority-checked, period-locked.
+    const { error } = await this.client.rpc('assign_financial_journal_cost_centre', {
+      p_entry_id: entryId,
+      p_branch_id: branchId,
+      p_department_id: departmentId,
+    });
 
-    const { error: entryError } = await this.client
-      .from('journal_entries')
-      .update(assignment as never)
-      .eq('id', entryId)
-      .eq('business_id', entry.business_id);
-    if (entryError) throw toRepositoryError('journal_entries', entryError);
-
-    // Single statement for every line, rather than a request per line.
-    const { error: linesError } = await this.client
-      .from('journal_lines')
-      .update(assignment as never)
-      .eq('journal_entry_id', entryId)
-      .eq('business_id', entry.business_id);
-    if (linesError) throw toRepositoryError('journal_lines', linesError);
-
-    if (!entry.source_id || !entry.source_type) return;
-
-    const tableMap: Record<string, 'invoices' | 'expenses' | 'payroll_runs'> = {
-      invoice: 'invoices',
-      expense: 'expenses',
-      payroll: 'payroll_runs',
-    };
-    const table = tableMap[entry.source_type];
-    if (!table) return; // unrecognised source_type — nothing to propagate to
-
-    const { error: sourceError } = await this.client
-      .from(table)
-      .update(assignment as never)
-      .eq('id', entry.source_id)
-      .eq('business_id', entry.business_id);
-    if (sourceError) throw toRepositoryError(table, sourceError);
+    if (error) throw toRepositoryError('journal_entries', error);
   }
 
   private async voidSourceRecord(

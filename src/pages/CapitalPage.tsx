@@ -5,7 +5,9 @@ import {
   Landmark, Coins, TrendingUp, ArrowDownCircle, ArrowUpCircle,
   Wallet, Receipt, Printer, FileDown,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { formatMwkDetailed } from '@/lib/formatters';
+import { journalCommandErrorMessage } from '@/lib/journalCommandErrors';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, AccountSubtype, LoanStatus, ShareTransactionType } from '@/dal/types/database';
@@ -406,6 +408,7 @@ function LoanModal({
   interestAccounts: Row<'accounts'>[];
 }) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     lenderName: '', description: '', principalAmount: '', interestRatePct: '',
     termMonths: '', startDate: today(), firstPaymentDate: '',
@@ -439,7 +442,7 @@ function LoanModal({
       setAlert({ type: 'success', message: 'Loan recorded and drawdown journal posted.' });
       setTimeout(onClose, 900);
     },
-    onError: (e: Error) => setAlert({ type: 'error', message: e.message }),
+    onError: (e: Error) => setAlert({ type: 'error', message: journalCommandErrorMessage(e, t) }),
   });
 
   return (
@@ -499,6 +502,7 @@ function RepaymentModal({
   bankAccounts: Row<'accounts'>[]; onClose: () => void; preselectedLoanId?: string;
 }) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     loanId: preselectedLoanId ?? (loans[0]?.id ?? ''),
     repaymentDate: today(), amount: '', principalPortion: '', bankAccountId: '',
@@ -530,7 +534,7 @@ function RepaymentModal({
       setAlert({ type: 'success', message: 'Repayment posted.' });
       setTimeout(onClose, 900);
     },
-    onError: (e: Error) => setAlert({ type: 'error', message: e.message }),
+    onError: (e: Error) => setAlert({ type: 'error', message: journalCommandErrorMessage(e, t) }),
   });
 
   return (
@@ -585,6 +589,7 @@ function ShareModal({
   shareAccounts: Row<'accounts'>[]; bankAccounts: Row<'accounts'>[];
 }) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [type, setType] = useState<ShareTransactionType>('issue');
   const [form, setForm] = useState({
     shareholderName: '', sharesCount: '', amount: '', shareAccountId: '', bankAccountId: '', reference: '', notes: '',
@@ -611,7 +616,7 @@ function ShareModal({
       setAlert({ type: 'success', message: type === 'issue' ? 'Shares issued and journal posted.' : 'Shares bought back and journal posted.' });
       setTimeout(onClose, 900);
     },
-    onError: (e: Error) => setAlert({ type: 'error', message: e.message }),
+    onError: (e: Error) => setAlert({ type: 'error', message: journalCommandErrorMessage(e, t) }),
   });
 
   return (

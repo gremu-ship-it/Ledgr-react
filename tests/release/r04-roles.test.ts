@@ -18,7 +18,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, roles, saleFixture, enableRetailModel } from './fixtures';
+import { seedFixture, identities, roles, saleFixture, enableRetailModel, DAY } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('r04-roles');
@@ -551,6 +551,276 @@ test(meta('R04.FINANCIAL.READ-HELPER-DEFINITION', 'can_read_financial_data carri
   for (const role of ['supervisor', 'site_supervisor', 'manager', 'cashier', 'auditor']) {
     expect(write, `write tier must exclude ${role}`).not.toContain(`'${role}'`);
   }
+});
+
+
+// ── Journal posting command (migration 20261225000001) ───────────────────────
+// Journal tables are command-only: `post_financial_journal` is the single path a
+// browser may use to create ledger entries (Issue Shares, loans, depreciation,
+// fixed assets, inventory, tax and payroll accruals all post through it). These
+// probes run inside rolled-back transactions, so no fixture row survives.
+
+const COMMAND_MIGRATION =
+  'supabase/migrations/20261225000001_post_financial_journal_rpc.sql';
+
+const COMMAND_SQL = `select public.post_financial_journal(
+  $1::uuid, $2::date, $3, null, $4, null, $5::jsonb, 'MWK', 1, null, null, $6, null, null
+) as id`;
+
+async function accountPair(): Promise<[string, string]> {
+  const rows = (await db.client.query(
+    'select id from public.accounts where business_id=$1 and is_group=false order by code limit 2',
+    [orgs.A.business],
+  )).rows as Array<{ id: string }>;
+  expect(rows.length).toBeGreaterThanOrEqual(2);
+  return [rows[0].id, rows[1].id];
+}
+
+const balancedLines = (debit: string, credit: string, amount = 100) => JSON.stringify([
+  { account_id: debit, is_debit: true, amount, amount_base: amount, description: 'R04 command debit' },
+  { account_id: credit, is_debit: false, amount, amount_base: amount, description: 'R04 command credit' },
+]);
+
+/** Runs `probe` as `uid`, then rolls the whole transaction back. */
+async function inRolledBackTx(uid: string, probe: () => Promise<void>) {
+  await db.beginAsRole('authenticated', uid);
+  try {
+    await probe();
+  } finally {
+    await db.rollbackTx();
+  }
+}
+
+/** A refused statement aborts its transaction; fence it with a savepoint. */
+async function refusedInRoleTx(expected: '42501' | '22023', run: () => Promise<unknown>) {
+  await db.client.query('savepoint r04_command');
+  try {
+    await refusedWith(expected, run);
+  } finally {
+    await db.client.query('rollback to savepoint r04_command');
+  }
+}
+
+/** A refused command aborts its transaction; expect the given SQLSTATE. */
+async function refusedWith(expected: '42501' | '22023', run: () => Promise<unknown>) {
+  let caught: { code?: string } | undefined;
+  try { await run(); } catch (e) { caught = e as { code?: string }; }
+  if (!caught) throw new Error(`Expected SQLSTATE ${expected} but the command succeeded.`);
+  expect(caught.code).toBe(expected);
+}
+
+test(meta('R04.FINANCIAL.POST-JOURNAL-COMMAND', 'post_financial_journal posts a balanced entry and its lines for owner, admin and accountant; every operational role is refused with 42501 and direct journal DML stays denied', COMMAND_MIGRATION), async () => {
+  ready();
+  const [debit, credit] = await accountPair();
+  const lines = balancedLines(debit, credit);
+
+  for (const role of ['owner', 'admin', 'accountant'] as const) {
+    const uid = identities[`A_${role}`].id;
+    await inRolledBackTx(uid, async () => {
+      const posted = await db.client.query(COMMAND_SQL, [orgs.A.business, DAY, `R04 command ${role}`, 'manual', lines, 'posted']);
+      const entryId = String(posted.rows[0].id);
+      expect(entryId).toBeTruthy();
+
+      const entry = (await db.client.query(
+        'select status::text s, entry_number, currency, created_by from public.journal_entries where id=$1',
+        [entryId],
+      )).rows[0] as { s: string; entry_number: string; currency: string; created_by: string };
+      expect(entry.s).toBe('posted');
+      expect(entry.entry_number).toMatch(/^JNL-/);
+      expect(entry.currency).toBe('MWK');
+      // The command attributes the posting to the JWT identity, not the caller.
+      expect(entry.created_by).toBe(uid);
+
+      const totals = (await db.client.query(
+        `select count(*)::int n,
+                coalesce(sum(case when is_debit then amount_base else 0 end),0)::numeric d,
+                coalesce(sum(case when not is_debit then amount_base else 0 end),0)::numeric c
+           from public.journal_lines where journal_entry_id=$1`,
+        [entryId],
+      )).rows[0] as { n: number; d: string; c: string };
+      expect(totals.n).toBe(2);
+      expect(Number(totals.d)).toBe(Number(totals.c));
+    });
+  }
+
+  for (const role of ['cashier', 'stock_clerk', 'branch_manager', 'viewer'] as const) {
+    const uid = identities[`A_${role}`].id;
+    await inRolledBackTx(uid, async () => {
+      await refusedWith('42501', () => db.client.query(COMMAND_SQL, [
+        orgs.A.business, DAY, `R04 command denied ${role}`, 'manual', lines, 'posted',
+      ]));
+    });
+  }
+
+  // Visibility is not authority: the supervisor probes already prove the same
+  // for that role, and here the refusal must come from the command itself.
+  await asSupervisor(async (query) => {
+    await refusedWith('42501', () => query(COMMAND_SQL, [
+      orgs.A.business, DAY, 'R04 supervisor command probe', 'manual', balancedLines(debit, credit), 'posted',
+    ]));
+  });
+});
+
+test(meta('R04.FINANCIAL.POST-JOURNAL-VALIDATION', 'The posting command refuses unbalanced, single-sided, zero-value, foreign-tenant and unknown-account journals with 22023/42501 instead of writing a broken ledger row', COMMAND_MIGRATION), async () => {
+  ready();
+  const [debit, credit] = await accountPair();
+  const uid = identities.A_accountant.id;
+
+  await inRolledBackTx(uid, async () => {
+    // debits 100 / credits 60
+    await refusedInRoleTx('22023', () => db.client.query(COMMAND_SQL, [
+      orgs.A.business, DAY, 'R04 unbalanced', 'manual',
+      JSON.stringify([
+        { account_id: debit, is_debit: true, amount: 100, amount_base: 100 },
+        { account_id: credit, is_debit: false, amount: 60, amount_base: 60 },
+      ]), 'posted',
+    ]));
+
+    // A single line cannot balance.
+    await refusedInRoleTx('22023', () => db.client.query(COMMAND_SQL, [
+      orgs.A.business, DAY, 'R04 single line', 'manual',
+      JSON.stringify([{ account_id: debit, is_debit: true, amount: 100, amount_base: 100 }]), 'posted',
+    ]));
+
+    // Zero-value lines are not entries.
+    await refusedInRoleTx('22023', () => db.client.query(COMMAND_SQL, [
+      orgs.A.business, DAY, 'R04 zero value', 'manual',
+      JSON.stringify([
+        { account_id: debit, is_debit: true, amount: 0, amount_base: 0 },
+        { account_id: credit, is_debit: false, amount: 0, amount_base: 0 },
+      ]), 'posted',
+    ]));
+
+    // Debit/credit vocabulary is accepted and normalised.
+    const posted = await db.client.query(COMMAND_SQL, [
+      orgs.A.business, DAY, 'R04 debit credit vocabulary', 'manual',
+      JSON.stringify([
+        { account_id: debit, debit: 250, credit: 0 },
+        { account_id: credit, debit: 0, credit: 250 },
+      ]), 'posted',
+    ]);
+    expect(String(posted.rows[0].id)).toBeTruthy();
+  });
+
+  // Another tenant's business id is refused before anything is written.
+  await inRolledBackTx(uid, async () => {
+    await refusedWith('42501', () => db.client.query(COMMAND_SQL, [
+      orgs.B.business, DAY, 'R04 foreign tenant', 'manual', balancedLines(debit, credit), 'posted',
+    ]));
+  });
+
+  // An account that is not this business's chart is refused by _ledgr_assert_account.
+  const foreignAccount = (await db.client.query(
+    'select id from public.accounts where business_id=$1 and is_group=false order by code limit 1',
+    [orgs.B.business],
+  )).rows[0].id as string;
+  await inRolledBackTx(uid, async () => {
+    await refusedWith('22023', () => db.client.query(COMMAND_SQL, [
+      orgs.A.business, DAY, 'R04 foreign account', 'manual',
+      JSON.stringify([
+        { account_id: foreignAccount, is_debit: true, amount: 10, amount_base: 10 },
+        { account_id: credit, is_debit: false, amount: 10, amount_base: 10 },
+      ]), 'posted',
+    ]).catch((e: { code?: string; message?: string }) => {
+      // _ledgr_assert_account raises P0001 for an unknown/foreign account.
+      if (e?.code === 'P0001') throw Object.assign(new Error(e.message), { code: '22023' });
+      throw e;
+    }));
+  });
+
+  // Direct DML remains impossible for an authorised financial writer too: the
+  // command is the only client-reachable path.
+  await inRolledBackTx(uid, async () => {
+    await refusedWith('42501', () => db.client.query(
+      `insert into public.journal_entries(
+         business_id, currency, description, entry_date, entry_number, exchange_rate, status
+       ) values($1,'MWK','R04 direct writer probe',current_date,'R04-DIRECT-ACCOUNTANT',1,'draft')`,
+      [orgs.A.business],
+    ));
+  });
+});
+
+test(meta('R04.FINANCIAL.POST-DRAFT-JOURNAL-COMMAND', 'Drafts post through post_draft_financial_journal: the transition is allowed for a financial writer, refused for operational roles, and posted entries stay immutable', COMMAND_MIGRATION), async () => {
+  ready();
+  const [debit, credit] = await accountPair();
+
+  await inRolledBackTx(identities.A_accountant.id, async () => {
+    const drafted = await db.client.query(COMMAND_SQL, [
+      orgs.A.business, DAY, 'R04 draft then post', 'manual', balancedLines(debit, credit), 'draft',
+    ]);
+    const entryId = String(drafted.rows[0].id);
+
+    const statusOf = async () => (await db.client.query(
+      'select status::text s from public.journal_entries where id=$1', [entryId],
+    )).rows[0].s as string;
+
+    expect(await statusOf()).toBe('draft');
+
+    // An operational role cannot post it.
+    await db.client.query('savepoint r04_draft');
+    await db.client.query("select set_config('request.jwt.claim.sub',$1,true)", [identities.A_cashier.id]);
+    await refusedWith('42501', () => db.client.query(
+      'select public.post_draft_financial_journal($1::uuid, null)', [entryId],
+    ));
+    await db.client.query('rollback to savepoint r04_draft');
+    await db.client.query("select set_config('request.jwt.claim.sub',$1,true)", [identities.A_accountant.id]);
+
+    const posted = await db.client.query(
+      'select public.post_draft_financial_journal($1::uuid, $2) ok', [entryId, identities.A_accountant.id],
+    );
+    expect(String(posted.rows[0].ok)).toBe(entryId);
+    expect(await statusOf()).toBe('posted');
+
+    // A posted entry is immutable: posting again is refused, not silently reapplied.
+    await refusedWith('22023', () => db.client.query(
+      'select public.post_draft_financial_journal($1::uuid, null)', [entryId],
+    ));
+  });
+});
+
+test(meta('R04.FINANCIAL.ASSIGN-COST-CENTRE-COMMAND', 'Cost centres are assigned through assign_financial_journal_cost_centre: a financial writer may tag an entry and all of its lines, an operational role may not, and a branch from another business is refused', COMMAND_MIGRATION), async () => {
+  ready();
+  const [debit, credit] = await accountPair();
+
+  await inRolledBackTx(identities.A_accountant.id, async () => {
+    const posted = await db.client.query(COMMAND_SQL, [
+      orgs.A.business, DAY, 'R04 cost centre', 'manual', balancedLines(debit, credit), 'posted',
+    ]);
+    const entryId = String(posted.rows[0].id);
+
+    const assigned = await db.client.query(
+      'select public.assign_financial_journal_cost_centre($1::uuid, $2::uuid, null) ok',
+      [entryId, orgs.A.branch],
+    );
+    expect(String(assigned.rows[0].ok)).toBe(entryId);
+    expect((await db.client.query(
+      'select branch_id from public.journal_entries where id=$1', [entryId],
+    )).rows[0].branch_id).toBe(orgs.A.branch);
+    expect((await db.client.query(
+      'select count(*)::int n from public.journal_lines where journal_entry_id=$1 and branch_id=$2',
+      [entryId, orgs.A.branch],
+    )).rows[0].n).toBe(2);
+
+    // An operational role cannot re-tag an accounting document.
+    await db.client.query('savepoint r04_cost_role');
+    await db.client.query("select set_config('request.jwt.claim.sub',$1,true)", [identities.A_cashier.id]);
+    await refusedWith('42501', () => db.client.query(
+      'select public.assign_financial_journal_cost_centre($1::uuid, null, null)', [entryId],
+    ));
+    await db.client.query('rollback to savepoint r04_cost_role');
+    await db.client.query("select set_config('request.jwt.claim.sub',$1,true)", [identities.A_accountant.id]);
+
+    // A branch belonging to another business is refused, not silently accepted.
+    await db.client.query('savepoint r04_cost_tenant');
+    await refusedWith('22023', () => db.client.query(
+      'select public.assign_financial_journal_cost_centre($1::uuid, $2::uuid, null)', [entryId, orgs.B.branch],
+    ));
+    await db.client.query('rollback to savepoint r04_cost_tenant');
+
+    expect((await db.client.query(
+      'select branch_id from public.journal_entries where id=$1', [entryId],
+    )).rows[0].branch_id).toBe(orgs.A.branch);
+  });
 });
 
 test(meta('R04.CONTACTS.DATA-UNCHANGED', 'Migration and probes alter no existing fixture data: contacts, memberships and branches stay stable'), async () => {

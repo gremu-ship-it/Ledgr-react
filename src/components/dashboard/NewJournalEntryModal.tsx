@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { journalCommandErrorMessage } from '@/lib/journalCommandErrors';
 import { X, Plus, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import { formatMwkDetailed } from '@/lib/formatters';
@@ -210,8 +211,11 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
       onCreated?.({ approvalSubmitted: result.approvalSubmitted });
       onClose();
     },
-    onError: () => {
-      setSubmitError(t('approvals.errors.actionFailed'));
+    onError: (err) => {
+      // Surface why the ledger refused the entry — an unbalanced set of lines,
+      // a closed period, or missing write authority — rather than a generic
+      // "action failed" that leaves the user guessing.
+      setSubmitError(journalCommandErrorMessage(err, t));
     },
   });
 

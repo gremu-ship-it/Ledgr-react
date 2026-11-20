@@ -193,6 +193,13 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
           insert: () => ({
             select: async () => ({ data: mockEntry.lines, error: null }),
           }),
+          // Read-back path: the posting command returns the entry id, then the
+          // repository loads the stored lines.
+          select: () => ({
+            eq: () => ({
+              eq: () => ({ order: async () => ({ data: mockEntry.lines, error: null }) }),
+            }),
+          }),
         };
       }
       if (table === 'tax_returns') {
@@ -226,11 +233,18 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
       };
     });
 
-    const mockClient = { from: fromMock } as unknown as SupabaseClient<Database>;
+    // Journal writes are commands: the ledger tables are command-only under RLS.
+    const rpc = vi.fn(async (fn: string) => ({ data: fn === 'post_financial_journal' ? mockEntry.id : null, error: null }));
+    const mockClient = { from: fromMock, rpc } as unknown as SupabaseClient<Database>;
     const repo = new PayrollRepository(mockClient);
 
     // Should auto-link pension account 2132 and succeed
     await expect(repo.approve('run-1', 'user-1', 'JNL-001', 'acc-bank')).resolves.toBeDefined();
+    // The payroll accrual posts through the command, never a direct table insert.
+    expect(rpc).toHaveBeenCalledWith('post_financial_journal', expect.objectContaining({
+      p_business_id: 'biz-1',
+      p_status: 'draft',
+    }));
   });
 
   it('throws ValidationError if TPR pension account is not linked and no fallback account is found', async () => {
@@ -307,7 +321,9 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
       };
     });
 
-    const mockClient = { from: fromMock } as unknown as SupabaseClient<Database>;
+    // Journal writes are commands: the ledger tables are command-only under RLS.
+    const rpc = vi.fn(async () => ({ data: null, error: null }));
+    const mockClient = { from: fromMock, rpc } as unknown as SupabaseClient<Database>;
     const repo = new PayrollRepository(mockClient);
 
     await expect(repo.approve('run-2', 'user-2', 'JNL-002', 'acc-bank')).rejects.toThrow(
@@ -434,6 +450,13 @@ describe('TaxReturnRepository auto-fallback', () => {
           insert: () => ({
             select: async () => ({ data: mockEntry.lines, error: null }),
           }),
+          // Read-back path: the posting command returns the entry id, then the
+          // repository loads the stored lines.
+          select: () => ({
+            eq: () => ({
+              eq: () => ({ order: async () => ({ data: mockEntry.lines, error: null }) }),
+            }),
+          }),
         };
       }
       return {
@@ -441,7 +464,9 @@ describe('TaxReturnRepository auto-fallback', () => {
       };
     });
 
-    const mockClient = { from: fromMock } as unknown as SupabaseClient<Database>;
+    // Journal writes are commands: the ledger tables are command-only under RLS.
+    const rpc = vi.fn(async (fn: string) => ({ data: fn === 'post_financial_journal' ? mockEntry.id : null, error: null }));
+    const mockClient = { from: fromMock, rpc } as unknown as SupabaseClient<Database>;
     const repo = new TaxReturnRepository(mockClient);
 
     await expect(repo.postToJournal('tr-1', 'acc-exp', 'user-1', 'JNL-100')).resolves.toBeDefined();

@@ -127,6 +127,12 @@ export function toRepositoryError(resource: string, error: unknown): RepositoryE
       err?.details ? `${message} — ${err.details}` : message,
       error,
     );
+  // 22023 (invalid_parameter_value) and P0001 are how the SECURITY DEFINER
+  // commands reject a domain rule — an unbalanced journal, a closed period, a
+  // non-draft entry being posted. Those sentences are written for the operator,
+  // so surface them verbatim instead of wrapping them in "Database error in …".
+  if (code === '22023' || code === 'P0001')
+    return new ValidationError(resource, message, error, { includeResource: false });
   if (code === 'PGRST116') return new NotFoundError(resource, 'unknown', error);
   if (code === '42501' || code === 'PGRST301' || code === '401' || code === '403')
     return new UnauthorizedError(resource, message, error);
