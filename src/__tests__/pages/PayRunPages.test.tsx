@@ -18,7 +18,11 @@ const mocks = vi.hoisted(() => ({
   postPayRun: vi.fn(),
   reversePayRun: vi.fn(),
   findByIdWithLines: vi.fn(),
+  printElementRef: vi.fn(),
 }));
+
+// Payslips print through the isolated-iframe engine, not a bare window.print().
+vi.mock('@/services/reportPrintService', () => ({ printElementRef: mocks.printElementRef }));
 
 vi.mock('@/lib/repositories', () => ({
   repos: {
@@ -257,13 +261,14 @@ describe('pay-run pages', () => {
       }],
     };
     mocks.getPayRun.mockResolvedValue(approvedRun);
-    const print = vi.fn();
-    Object.defineProperty(window, 'print', { configurable: true, value: print });
+    mocks.printElementRef.mockClear();
 
     renderWithRoute(<PayRunDetailPage />, '/payroll/pay-runs/run-1');
 
     fireEvent.click(await screen.findByRole('button', { name: 'payroll.printPayslips' }));
-    expect(print).toHaveBeenCalledTimes(1);
+    expect(mocks.printElementRef).toHaveBeenCalledTimes(1);
+    // The printed source is the payslip print view itself, not the app shell.
+    expect(mocks.printElementRef.mock.calls[0][0]).toBe(document.querySelector('#pay-run-print-view'));
     const printable = document.querySelector('#pay-run-print-view')?.textContent ?? '';
     for (const content of [
       'Janet Banda', 'payroll.grossPay', 'payroll.payeAmount', 'payroll.pensionEmployee',
@@ -273,13 +278,12 @@ describe('pay-run pages', () => {
 
   it('prints payslips for a posted pay run', async () => {
     mocks.getPayRun.mockResolvedValue({ ...run, status: 'posted', journal_entry_id: 'journal-1' });
-    const print = vi.fn();
-    Object.defineProperty(window, 'print', { configurable: true, value: print });
+    mocks.printElementRef.mockClear();
 
     renderWithRoute(<PayRunDetailPage />, '/payroll/pay-runs/run-1');
 
     fireEvent.click(await screen.findByRole('button', { name: 'payroll.printPayslips' }));
-    expect(print).toHaveBeenCalledTimes(1);
+    expect(mocks.printElementRef).toHaveBeenCalledTimes(1);
   });
 
   it('shows a support message when the pay-run reversal RPC is unavailable', async () => {

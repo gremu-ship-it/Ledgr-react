@@ -8,7 +8,7 @@ import { BranchPerformanceReport } from './BranchPerformanceReport';
 const mocks = vi.hoisted(() => ({
   queryResult: { data: undefined as unknown, isLoading: false, isError: false, error: null as unknown },
   downloadFile: vi.fn(),
-  printReport: vi.fn(),
+  printElementRef: vi.fn(),
   revenueRows: [{ key: 'service-a', name: 'Consulting', invoiceCount: 2, amount: 120 }],
 }));
 
@@ -38,13 +38,15 @@ vi.mock('@/lib/branchPerformance', () => ({
 }));
 vi.mock('@/lib/reports/export', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/reports/export')>();
-  return { ...actual, downloadFile: mocks.downloadFile, printReport: mocks.printReport };
+  return { ...actual, downloadFile: mocks.downloadFile };
 });
+// PDF export is the isolated-iframe print engine (no jsPDF/html2canvas raster).
+vi.mock('@/services/reportPrintService', () => ({ printElementRef: mocks.printElementRef }));
 
 afterEach(() => {
   cleanup();
   mocks.downloadFile.mockClear();
-  mocks.printReport.mockClear();
+  mocks.printElementRef.mockClear();
 });
 
 const equityData = {
@@ -77,7 +79,7 @@ describe('standalone Growth report exports', () => {
     expect(csv).toContain('reports.totalEquity,140.00,,,,,170.00');
 
     fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportPDF' }));
-    expect(mocks.printReport).toHaveBeenCalledOnce();
+    expect(mocks.printElementRef).toHaveBeenCalledOnce();
   });
 
   it('exports invoice-based Revenue Breakdown data to CSV and prints the report to PDF', () => {
@@ -96,7 +98,7 @@ describe('standalone Growth report exports', () => {
     expect(csv).toContain('reports.revenueBreakdown.totalNetRevenue,,120.00,100.00');
 
     fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportPDF' }));
-    expect(mocks.printReport).toHaveBeenCalledOnce();
+    expect(mocks.printElementRef).toHaveBeenCalledOnce();
   });
 
   it('exports Branch Performance rows to CSV and prints the report to PDF', () => {
@@ -115,6 +117,6 @@ describe('standalone Growth report exports', () => {
     expect(csv).toContain('reports.shared.total,,0.00,0.00,0.00');
 
     fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportPDF' }));
-    expect(mocks.printReport).toHaveBeenCalledOnce();
+    expect(mocks.printElementRef).toHaveBeenCalledOnce();
   });
 });

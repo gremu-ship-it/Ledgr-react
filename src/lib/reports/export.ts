@@ -42,8 +42,3 @@ export function reportFilename(reportName: string, dateFrom?: string, dateTo?: s
   const period = dateFrom && dateTo ? `${dateFrom}_to_${dateTo}` : date;
   return `${reportName}_${period}.csv`;
 }
-
-/** Open the browser's native print dialog (users may choose Save as PDF). */
-export function printReport(): void {
-  window.print();
-}

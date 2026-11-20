@@ -1,5 +1,5 @@
 import type { BusinessBranding } from './documents/types';
-import { generateProfessionalReportDocument } from './documents/documentGenerator';
+import { printHtmlContent } from '@/services/reportPrintService';
 
 export interface ExportOptions {
   title: string;
@@ -27,28 +27,26 @@ function resolveBusiness(opts: ExportOptions): BusinessBranding {
   };
 }
 
-// Professional PDF export with full business letterhead, logo, and polished styling
+/**
+ * Professional PDF export.
+ *
+ * The document is rendered by the browser's own print pipeline inside an
+ * isolated frame (`printHtmlContent`) rather than rasterised with html2canvas
+ * + jsPDF. The raster path produced blank or clipped pages whenever a report sat
+ * in a scroll container, a hidden tab or an `overflow: hidden` card — the exact
+ * "blank PDF" defect — and it could not paginate. Printing keeps the report's own
+ * styles, produces real selectable text and lets the operator choose
+ * "Save as PDF" in the browser dialog.
+ */
 export function exportReportAsPDF(opts: ExportOptions) {
   const business = resolveBusiness(opts);
+  const cleanHtml = opts.htmlContent?.trim()
+    || '<p style="color:#94a3b8; font-size:9pt;">No content available for this report.</p>';
 
-  // If htmlContent already looks like a full document (has <table>), keep it as is.
-  // We wrap it as a report section for professional rendering.
-  const cleanHtml = opts.htmlContent?.trim() || '<p style="color:#94a3b8; font-size:9pt;">No content available for this report.</p>';
-
-  // Detect if htmlContent is from old selector that pulled entire page wrapper; try to strip outer containers
-  // For financial reports we want only table content; if selector returned outer page, extract inner table portion
-  // Otherwise keep as is - generateProfessionalReportDocument will style it.
-
-  generateProfessionalReportDocument({
-    business,
+  printHtmlContent(cleanHtml, {
     title: opts.title,
     subtitle: opts.subtitle,
-    dateLabel: opts.dateLabel,
-    period: opts.subtitle?.includes('–') || opts.subtitle?.includes('to') ? opts.subtitle : opts.dateLabel,
-    currency: opts.currency,
-    preparerName: opts.preparerName,
-    notes: opts.notes,
-    sections: [{ html: `<div style="margin-top:8px;">${cleanHtml}</div>` }],
+    companyName: business.name || opts.businessName,
   });
 }
 

@@ -9,13 +9,15 @@ import { periodForPreset, previousPeriod } from '@/lib/reports/periods';
 const mocks = vi.hoisted(() => ({
   getTrialBalance: vi.fn(),
   downloadFile: vi.fn(),
-  printReport: vi.fn(),
+  printElementRef: vi.fn(),
 }));
 
 vi.mock('@/lib/reports/export', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/reports/export')>();
-  return { ...actual, downloadFile: mocks.downloadFile, printReport: mocks.printReport };
+  return { ...actual, downloadFile: mocks.downloadFile };
 });
+// PDF export goes through the isolated-iframe print engine, never a raw window.print().
+vi.mock('@/services/reportPrintService', () => ({ printElementRef: mocks.printElementRef }));
 vi.mock('@/dal/repositories/ReportRepository', () => ({
   ReportRepository: { getTrialBalance: mocks.getTrialBalance },
 }));
@@ -89,7 +91,7 @@ afterEach(() => {
   cleanup();
   mocks.getTrialBalance.mockReset();
   mocks.downloadFile.mockReset();
-  mocks.printReport.mockReset();
+  mocks.printElementRef.mockReset();
 });
 
 describe('ProfitLossPage', () => {

@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
-import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
+import { downloadFile, generateCSV, reportFilename } from '@/lib/reports/export';
+import { printElementRef } from '@/services/reportPrintService';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
 import { useAccessibleReportBranches } from '@/hooks/useAccessibleReportBranches';
@@ -44,6 +45,8 @@ export function TrialBalancePage() {
   const { t, i18n } = useTranslation();
   const currentBusiness = useAppStore((state) => state.currentBusiness);
   const businessId = currentBusiness?.business?.id ?? '';
+  // The printed document is built from exactly what the screen shows.
+  const reportContentRef = useRef<HTMLElement>(null);
   const [period, setPeriod] = useState(initialPeriod);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string> | null>(null);
@@ -151,7 +154,12 @@ export function TrialBalancePage() {
           </button>
           <ReportExportButtons
             onExportCSV={handleExportCSV}
-            onExportPDF={printReport}
+            onExportPDF={() => printElementRef(reportContentRef.current, {
+                title: t('reports.trialBalance.title'),
+                subtitle: t('reports.trialBalance.subtitle', { from: formatDate(period.from, i18n.language), to: formatDate(period.to, i18n.language), branch: branchLabel }),
+                companyName: currentBusiness?.business?.name ?? undefined,
+                orientation: 'landscape',
+              })}
             disabled={reportQuery.isFetching || reportQuery.isError || !hasActivity || hasInvalidPeriod}
           />
         </div>
@@ -172,7 +180,7 @@ export function TrialBalancePage() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm" aria-label={t('reports.trialBalance.title')}>
+      <section ref={reportContentRef} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm" aria-label={t('reports.trialBalance.title')}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 sm:px-5">
           <p className="text-sm font-semibold text-gray-800">{t('reports.trialBalance.title')}</p>
           <div className="flex items-center gap-2">

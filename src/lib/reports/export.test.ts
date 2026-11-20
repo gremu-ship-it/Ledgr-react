@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { downloadFile, generateCSV, printReport, reportFilename } from './export';
+import { downloadFile, generateCSV, reportFilename } from './export';
 
 describe('report export utilities', () => {
   afterEach(() => {
@@ -52,11 +52,5 @@ describe('report export utilities', () => {
     expect(click).toHaveBeenCalledOnce();
     expect(document.querySelector('a[download="report.csv"]')).toBeNull();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:report');
-  });
-
-  it('delegates PDF output to the browser print dialog', () => {
-    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
-    printReport();
-    expect(print).toHaveBeenCalledOnce();
   });
 });

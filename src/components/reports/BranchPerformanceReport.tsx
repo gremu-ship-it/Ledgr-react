@@ -1,5 +1,5 @@
 import { formatMwkDetailed } from '@/lib/formatters';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/paginateQuery';
@@ -25,7 +25,8 @@ import {
 import { repos } from '@/lib/repositories';
 import type { AccountSubtype } from '@/dal/types/database';
 import { ReportExportButtons } from './ReportExportButtons';
-import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
+import { downloadFile, generateCSV, reportFilename } from '@/lib/reports/export';
+import { printElementRef } from '@/services/reportPrintService';
 import {
   buildBranchPerformance,
   UNASSIGNED_BRANCH_ID,
@@ -242,6 +243,13 @@ export function BranchPerformanceReport({
 }) {
   const { t } = useTranslation();
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  // One ref for every branch of this render: each return renders a single root.
+  const reportContentRef = useRef<HTMLDivElement>(null);
+  const handlePrint = () => printElementRef(reportContentRef.current, {
+    title: t('reports.branchPerformance'),
+    subtitle: periodLabel(periodStart, periodEnd),
+    orientation: 'landscape',
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['branch_performance', businessId, periodStart, periodEnd],
@@ -367,18 +375,18 @@ export function BranchPerformanceReport({
 
   if (error) {
     return (
-      <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
+      <div ref={reportContentRef} className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
         <AlertTriangle className="h-8 w-8 text-red-400" />
         <p className="text-sm text-gray-500">Could not load branch performance report.</p>
-        {standalone && <ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} disabled />}
+        {standalone && <ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={handlePrint} disabled />}
       </div>
     );
   }
 
   if (!data || data.branches.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
-        {standalone && <div className="mb-4 flex justify-center"><ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} disabled /></div>}
+      <div ref={reportContentRef} className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
+        {standalone && <div className="mb-4 flex justify-center"><ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={handlePrint} disabled /></div>}
         <Building2 className="mx-auto h-10 w-10 text-gray-300" />
         <h2 className="mt-3 text-base font-semibold text-gray-900">No branches set up yet</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
@@ -390,8 +398,8 @@ export function BranchPerformanceReport({
 
   if (rows.length === 0 || rows.every((row) => row.accountBreakdown.length === 0)) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-        {standalone && <div className="mb-4 flex justify-center"><ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} /></div>}
+      <div ref={reportContentRef} className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+        {standalone && <div className="mb-4 flex justify-center"><ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={handlePrint} /></div>}
         <BarChart3 className="mx-auto h-10 w-10 text-gray-300" />
         <h2 className="mt-3 text-base font-semibold text-gray-900">No branch activity for this period</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
@@ -402,8 +410,8 @@ export function BranchPerformanceReport({
   }
 
   return (
-    <div className="space-y-6">
-      {standalone && <ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} />}
+    <div ref={reportContentRef} className="space-y-6">
+      {standalone && <ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={handlePrint} />}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Total branch revenue" value={formatMwkDetailed(totals.revenue)} helper={periodLabel(periodStart, periodEnd)} />
         <SummaryCard label="Gross profit" value={formatMwkDetailed(totals.grossProfit)} helper={`${formatPercent(totals.revenue ? (totals.grossProfit / totals.revenue) * 100 : null)} gross margin`} tone={totals.grossProfit < 0 ? 'bad' : 'good'} />

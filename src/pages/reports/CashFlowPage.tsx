@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw } from 'lucide-react';
 import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
-import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
+import { downloadFile, generateCSV, reportFilename } from '@/lib/reports/export';
+import { printElementRef } from '@/services/reportPrintService';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
 import { PeriodPicker } from '@/components/reports/PeriodPicker';
@@ -58,6 +59,8 @@ export function CashFlowPage() {
   const { t, i18n } = useTranslation();
   const currentBusiness = useAppStore((state) => state.currentBusiness);
   const businessId = currentBusiness?.business?.id ?? '';
+  // The printed document is built from exactly what the screen shows.
+  const reportContentRef = useRef<HTMLElement>(null);
   const [period, setPeriod] = useState(initialPeriod);
   const [branchId, setBranchId] = useState<string | null>(null);
   const { data: branches = [] } = useAccessibleReportBranches(businessId);
@@ -189,7 +192,12 @@ export function CashFlowPage() {
             </button>
             <ReportExportButtons
               onExportCSV={handleExportCSV}
-              onExportPDF={printReport}
+              onExportPDF={() => printElementRef(reportContentRef.current, {
+                title: t('reports.cashFlow.title'),
+                subtitle: t('reports.cashFlow.subtitle', { from: formatDate(period.from, i18n.language), to: formatDate(period.to, i18n.language), branch: branchLabel }),
+                companyName: currentBusiness?.business?.name ?? undefined,
+                orientation: 'landscape',
+              })}
               disabled={isLoading || hasError || !validPeriod || !hasActivity}
             />
           </div>
@@ -223,7 +231,7 @@ export function CashFlowPage() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm" aria-label={t('reports.cashFlow.title')}>
+      <section ref={reportContentRef} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm" aria-label={t('reports.cashFlow.title')}>
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-5">
           <h2 className="text-sm font-semibold text-gray-800">{t('reports.cashFlow.title')}</h2>
           <p className="text-xs text-gray-500">

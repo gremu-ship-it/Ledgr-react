@@ -1,10 +1,11 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, FileCheck2, Plus, ReceiptText } from 'lucide-react';
+import { CalendarDays, FileCheck2, Plus, Printer, ReceiptText } from 'lucide-react';
 import type { Project, ProjectValuationDocument } from '@/dal/repositories/ProjectRepository';
 import type { PaymentCertificate, PaymentCertificateStatus } from '@/dal/repositories/ConstructionCertificatesRepository';
 import { repos } from '@/lib/repositories';
+import { printElementRef } from '@/services/reportPrintService';
 import { formatMoney } from '@/lib/construction/constructionWorkspaceView';
 import { useAppStore } from '@/store/useAppStore';
 
@@ -167,6 +168,14 @@ export function PaymentCertificatesPage() {
     createMutation.mutate();
   };
 
+  const certificateReportRef = useRef<HTMLDivElement>(null);
+  const printCertificates = () => printElementRef(certificateReportRef.current, {
+    title: t(`${k}.title`),
+    subtitle: (projectsQuery.data ?? []).find((row) => row.id === projectId)?.name,
+    companyName: currentBusiness?.business?.name ?? undefined,
+    orientation: 'landscape',
+  });
+
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -174,14 +183,24 @@ export function PaymentCertificatesPage() {
           <h1 className="text-2xl font-semibold text-gray-900">{t(`${k}.title`)}</h1>
           <p className="mt-1 max-w-3xl text-sm text-gray-600">{t(`${k}.description`)}</p>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          disabled={!projectId || eligibleValuations.length === 0 || isBusy}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />{t(`${k}.new`)}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={printCertificates}
+            disabled={!projectId || certificates.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+          >
+            <Printer className="h-4 w-4" aria-hidden="true" />{t(`${k}.print`)}
+          </button>
+          <button
+            type="button"
+            onClick={openCreate}
+            disabled={!projectId || eligibleValuations.length === 0 || isBusy}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />{t(`${k}.new`)}
+          </button>
+        </div>
       </header>
 
       <section className="rounded-xl border border-gray-200 bg-white p-4">
@@ -196,7 +215,7 @@ export function PaymentCertificatesPage() {
 
       {errorKey ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{t(errorKey)}</p> : null}
       {projectId ? (
-        <>
+        <div ref={certificateReportRef} className="space-y-6">
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label={t(`${k}.summaryLabel`)}>
             <SummaryCard label={t(`${k}.totalCertified`)} value={formatMoney(totalCertified, currency)} icon={<FileCheck2 className="h-5 w-5" aria-hidden="true" />} />
             <SummaryCard label={t(`${k}.totalPaid`)} value={formatMoney(totalPaid, currency)} icon={<ReceiptText className="h-5 w-5" aria-hidden="true" />} />
@@ -244,7 +263,7 @@ export function PaymentCertificatesPage() {
               </div>
             ) : null}
           </section>
-        </>
+        </div>
       ) : null}
 
       {showCreate ? (
