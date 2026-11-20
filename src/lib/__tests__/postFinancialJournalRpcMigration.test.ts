@@ -120,3 +120,83 @@ describe('post_financial_journal command migration', () => {
     expect(CODE).toContain('using (public.can_read_financial_data(business_id))');
   });
 });
+
+// ── 20261225000002: source_id / created_by / posted_by are uuid on the live
+//    database and text in this repository's base schema ───────────────────────
+const UUID_MIGRATION_PATH = 'supabase/migrations/20261225000002_fix_journal_source_id_uuid_cast.sql';
+const UUID_SQL = readFileSync(UUID_MIGRATION_PATH, 'utf8');
+const UUID_CODE = UUID_SQL.replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/--[^\n]*/g, ' ')
+  .replace(/\s+/g, ' ')
+  .toLowerCase();
+
+const uuidBody = (functionName: string) => {
+  const start = UUID_CODE.indexOf(`create or replace function public.${functionName}`);
+  expect(start, `${functionName} must be redefined`).toBeGreaterThan(-1);
+  const end = UUID_CODE.indexOf('$$;', start);
+  expect(end, `${functionName} must be terminated`).toBeGreaterThan(start);
+  return UUID_CODE.slice(start, end);
+};
+
+const uuidPostJournal = uuidBody('post_financial_journal');
+const uuidPostDraft = uuidBody('post_draft_financial_journal');
+const uuidAssignCentre = uuidBody('assign_financial_journal_cost_centre');
+
+describe('post_financial_journal source_id uuid cast migration', () => {
+  it('resolves the physical type of journal_entries.source_id at run time', () => {
+    expect(uuidPostJournal).toContain('from information_schema.columns c');
+    expect(uuidPostJournal).toContain("c.table_name = 'journal_entries'");
+    expect(uuidPostJournal).toContain("c.column_name = 'source_id'");
+    expect(uuidPostJournal).toContain("if coalesce(v_source_id_type, 'text') = 'uuid' then");
+  });
+
+  it('casts only uuid-shaped text into the uuid column', () => {
+    // A blind `p_source_id::uuid` would turn the 42804 into a 22P02 the moment a
+    // composite key ("GRN-…") reached the command, so the cast is guarded.
+    expect(uuidPostJournal).toContain(
+      "v_source_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
+    );
+    expect(uuidPostJournal).toContain('v_source_uuid := v_source_text::uuid');
+    // Non-uuid keys still post; the key survives in posting_key.
+    expect(uuidPostJournal).toContain('raise warning');
+    expect(uuidPostJournal).toContain('v_source_text := null');
+  });
+
+  it('never hands the text parameter straight to the insert', () => {
+    // One branch per column shape: uuid expression, or the raw text.
+    expect(uuidPostJournal).toContain('insert into public.journal_entries');
+    expect(uuidPostJournal).toContain('v_source_uuid,');
+    expect(uuidPostJournal).toContain('v_source_text,');
+    expect(uuidPostJournal).not.toMatch(/values \([^)]*\bp_source_id\b/);
+  });
+
+  it('writes created_by / posted_by as uuid expressions, accepted by both shapes', () => {
+    // uuid → text is an assignment cast; text → uuid is not, which is what broke.
+    expect(uuidPostJournal).not.toContain('v_user::text');
+    expect(uuidPostJournal).toContain('v_user,');
+    expect(uuidPostDraft).not.toContain('v_user::text');
+    expect(uuidPostDraft).toContain('then btrim(p_posted_by)::uuid');
+    expect(uuidPostDraft).toContain('else v_user');
+  });
+
+  it('compares the uuid-shaped source_id as text in the cost-centre command', () => {
+    // `uuid ~ text` is 42883 on the live shape.
+    expect(uuidAssignCentre).toContain("v_entry.source_id::text ~ '^[0-9a-f");
+    expect(uuidAssignCentre).not.toContain('where id = v_entry.source_id::uuid');
+    expect(uuidAssignCentre).toContain('where id = (v_entry.source_id::text)::uuid');
+  });
+
+  it('replaces functions only — no table, policy or data change — and keeps the grants', () => {
+    expect(UUID_CODE).not.toContain('alter table public.journal_entries');
+    expect(UUID_CODE).not.toContain('create policy');
+    expect(UUID_CODE).not.toContain('drop policy');
+    // The only UPDATEs are the commands' own transitions (draft→posted, cost
+    // centre) — nothing rewrites a column definition or a policy.
+    expect(UUID_CODE).not.toContain('alter column');
+    expect(UUID_CODE).not.toContain('set source_id');
+    for (const fn of ['post_financial_journal', 'post_draft_financial_journal', 'assign_financial_journal_cost_centre']) {
+      expect(UUID_CODE).toContain(`grant execute on function public.${fn}`);
+    }
+    expect(UUID_CODE).toContain('from public, anon');
+  });
+});

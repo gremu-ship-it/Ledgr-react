@@ -560,11 +560,19 @@ test(meta('R04.FINANCIAL.READ-HELPER-DEFINITION', 'can_read_financial_data carri
 // fixed assets, inventory, tax and payroll accruals all post through it). These
 // probes run inside rolled-back transactions, so no fixture row survives.
 
+// The command itself, and the type fix that redefines it for the live
+// database's uuid-shaped source_id / created_by / posted_by columns.
 const COMMAND_MIGRATION =
-  'supabase/migrations/20261225000001_post_financial_journal_rpc.sql';
+  'supabase/migrations/20261225000001_post_financial_journal_rpc.sql + 20261225000002_fix_journal_source_id_uuid_cast.sql';
 
 const COMMAND_SQL = `select public.post_financial_journal(
   $1::uuid, $2::date, $3, null, $4, null, $5::jsonb, 'MWK', 1, null, null, $6, null, null
+) as id`;
+
+// Same command with an explicit p_source_id (text parameter), used by the
+// source-id probe to prove the value survives the column's physical type.
+const WITH_SOURCE_SQL = `select public.post_financial_journal(
+  $1::uuid, $2::date, $3, null, $4, $5, $6::jsonb, 'MWK', 1, null, null, $7, null, null
 ) as id`;
 
 async function accountPair(): Promise<[string, string]> {
@@ -820,6 +828,33 @@ test(meta('R04.FINANCIAL.ASSIGN-COST-CENTRE-COMMAND', 'Cost centres are assigned
     expect((await db.client.query(
       'select branch_id from public.journal_entries where id=$1', [entryId],
     )).rows[0].branch_id).toBe(orgs.A.branch);
+  });
+});
+
+test(meta('R04.FINANCIAL.POST-JOURNAL-SOURCE-ID', 'A posting keeps a uuid source id and stores an empty one as NULL, so the command works on both journal_entries.source_id shapes', COMMAND_MIGRATION), async () => {
+  ready();
+  const [debit, credit] = await accountPair();
+  const sourceId = 'd38e4ce8-6f4a-4a44-9f5e-8a3f1b7c2d10';
+
+  await inRolledBackTx(identities.A_accountant.id, async () => {
+    // p_source_id is a text parameter: it must reach a uuid column cast, and a
+    // text column verbatim. An empty string is normalised to NULL.
+    const withSource = await db.client.query(WITH_SOURCE_SQL, [
+      orgs.A.business, DAY, 'R04 source id', 'share_issue', sourceId,
+      balancedLines(debit, credit), 'posted',
+    ]);
+    const entryId = String(withSource.rows[0].id);
+    expect((await db.client.query(
+      'select source_id::text s from public.journal_entries where id=$1', [entryId],
+    )).rows[0].s).toBe(sourceId);
+
+    const blank = await db.client.query(WITH_SOURCE_SQL, [
+      orgs.A.business, DAY, 'R04 blank source id', 'manual', '',
+      balancedLines(debit, credit), 'posted',
+    ]);
+    expect((await db.client.query(
+      'select source_id from public.journal_entries where id=$1', [String(blank.rows[0].id)],
+    )).rows[0].source_id).toBeNull();
   });
 });
 
