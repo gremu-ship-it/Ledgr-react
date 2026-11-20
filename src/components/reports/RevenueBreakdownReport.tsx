@@ -1,16 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, PackageOpen } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { ReportHeader } from './ReportHeader';
-import { generateProfessionalReportDocument } from '@/lib/documents/documentGenerator';
-import { businessRowToBranding } from '@/lib/documents/types';
 import { buildRevenueBreakdown, type RevenueInvoice, type RevenueInvoiceLine } from '@/lib/revenueBreakdown';
 import type { Row } from '@/dal/types/database';
 import { ReportExportButtons } from './ReportExportButtons';
-import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
+import { downloadFile, generateCSV, reportFilename } from '@/lib/reports/export';
+import { printElementRef, printHtmlContent } from '@/services/reportPrintService';
 
 const REVENUE_INVOICE_TYPES = ['invoice', 'credit_note', 'debit_note'];
 
@@ -37,7 +36,7 @@ function escapeHtml(value: string): string {
 /** Revenue earned from invoice lines, grouped by the product or service sold. */
 export function RevenueBreakdownReport({ businessId, periodStart, periodEnd, standalone = false }: Props) {
   const { t } = useTranslation();
-  const { business: brandBusiness, businessName, logoUrl, brandColor } = useBrandTheme();
+  const { business: brandBusiness, businessName } = useBrandTheme();
   const functionalCurrency = (brandBusiness as Row<'businesses'> | undefined)?.base_currency || 'MWK';
   const formatCurrency = (value: number) => new Intl.NumberFormat(undefined, {
     style: 'currency', currency: functionalCurrency, minimumFractionDigits: 2,
@@ -108,9 +107,7 @@ export function RevenueBreakdownReport({ businessId, periodStart, periodEnd, sta
   );
   const totalRevenue = rows.reduce((total, row) => total + row.amount, 0);
   const periodLabel = `${new Date(`${periodStart}T00:00:00`).toLocaleDateString()} – ${new Date(`${periodEnd}T00:00:00`).toLocaleDateString()}`;
-  const businessBranding = brandBusiness
-    ? businessRowToBranding(brandBusiness as Row<'businesses'>)
-    : { name: businessName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: functionalCurrency };
+  const reportContentRef = useRef<HTMLDivElement>(null);
 
   const handleExport = () => {
     const rowsHtml = rows.map((row) => `
@@ -120,13 +117,12 @@ export function RevenueBreakdownReport({ businessId, periodStart, periodEnd, sta
         <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:600;">${formatCurrency(row.amount)}</td>
         <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">${totalRevenue ? `${((row.amount / totalRevenue) * 100).toFixed(1)}%` : '—'}</td>
       </tr>`).join('');
-    generateProfessionalReportDocument({
-      business: businessBranding,
-      title: 'Revenue by Product & Service',
+    // Printed through the isolated frame: real text, real pagination, no raster.
+    printHtmlContent(`<table style="width:100%; border-collapse:collapse; font-size:9.5pt;"><thead><tr style="background:#0f172a;color:white;"><th style="padding:10px 12px;text-align:left;">Product / Service</th><th style="padding:10px 12px;text-align:right;">Invoices</th><th style="padding:10px 12px;text-align:right;">Net revenue</th><th style="padding:10px 12px;text-align:right;">Share</th></tr></thead><tbody>${rowsHtml}</tbody><tfoot><tr style="background:#f8fafc;font-weight:700;"><td colspan="2" style="padding:10px 12px;">Total net revenue</td><td style="padding:10px 12px;text-align:right;">${formatCurrency(totalRevenue)}</td><td style="padding:10px 12px;text-align:right;">100.0%</td></tr></tfoot></table>`, {
+      title: t('reports.revenueBreakdown.title'),
       subtitle: `Invoice-based net revenue — ${periodLabel}`,
-      dateLabel: periodLabel,
-      currency: functionalCurrency,
-      sections: [{ html: `<table style="width:100%; border-collapse:collapse; font-size:9.5pt;"><thead><tr style="background:#0f172a;color:white;"><th style="padding:10px 12px;text-align:left;">Product / Service</th><th style="padding:10px 12px;text-align:right;">Invoices</th><th style="padding:10px 12px;text-align:right;">Net revenue</th><th style="padding:10px 12px;text-align:right;">Share</th></tr></thead><tbody>${rowsHtml}</tbody><tfoot><tr style="background:#f8fafc;font-weight:700;"><td colspan="2" style="padding:10px 12px;">Total net revenue</td><td style="padding:10px 12px;text-align:right;">${formatCurrency(totalRevenue)}</td><td style="padding:10px 12px;text-align:right;">100.0%</td></tr></tfoot></table>` }],
+      companyName: businessName,
+      orientation: 'landscape',
     });
   };
 
@@ -155,9 +151,17 @@ export function RevenueBreakdownReport({ businessId, periodStart, periodEnd, sta
   if (isError) return <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">Could not load the revenue breakdown.</div>;
 
   return (
-    <div className="max-w-4xl rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div ref={reportContentRef} className="max-w-4xl rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       {standalone ? (
-        <ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} />
+        <ReportExportButtons
+          onExportCSV={handleExportCSV}
+          onExportPDF={() => printElementRef(reportContentRef.current, {
+            title: t('reports.revenueBreakdown.title'),
+            subtitle: periodLabel,
+            companyName: businessName,
+            orientation: 'landscape',
+          })}
+        />
       ) : (
         <ReportHeader
           title="Revenue by Product & Service"

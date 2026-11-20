@@ -9,13 +9,15 @@ const mocks = vi.hoisted(() => ({
   rows: [] as TrialBalanceRow[],
   getTrialBalance: vi.fn(),
   downloadFile: vi.fn(),
-  printReport: vi.fn(),
+  printElementRef: vi.fn(),
 }));
 
 vi.mock('@/lib/reports/export', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/reports/export')>();
-  return { ...actual, downloadFile: mocks.downloadFile, printReport: mocks.printReport };
+  return { ...actual, downloadFile: mocks.downloadFile };
 });
+// PDF export goes through the isolated-iframe print engine, never a raw window.print().
+vi.mock('@/services/reportPrintService', () => ({ printElementRef: mocks.printElementRef }));
 vi.mock('@/dal/repositories/ReportRepository', () => ({
   ReportRepository: { getTrialBalance: mocks.getTrialBalance },
 }));
@@ -59,7 +61,7 @@ afterEach(() => {
   cleanup();
   mocks.getTrialBalance.mockReset();
   mocks.downloadFile.mockReset();
-  mocks.printReport.mockReset();
+  mocks.printElementRef.mockReset();
   mocks.rows = activeRows;
 });
 
@@ -100,7 +102,11 @@ describe('TrialBalancePage', () => {
     expect(mimeType).toBe('text/csv;charset=utf-8');
 
     fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportPDF' }));
-    expect(mocks.printReport).toHaveBeenCalledOnce();
+    expect(mocks.printElementRef).toHaveBeenCalledOnce();
+    const [printedElement, printOptions] = mocks.printElementRef.mock.calls[0];
+    // Printing the report card (not the app shell) is what fixed the blank PDFs.
+    expect(printedElement).toBeInstanceOf(HTMLElement);
+    expect(printOptions).toEqual(expect.objectContaining({ orientation: 'landscape' }));
   });
 
   it('exports data from the selected branch after applying the server-side filter', async () => {

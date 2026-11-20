@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import type { EquityRollForwardLine } from '@/dal/repositories/FinancialStatementRepository';
@@ -12,7 +12,8 @@ import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { businessRowToBranding } from '@/lib/documents/types';
 import type { Row } from '@/dal/types/database';
 import { ReportExportButtons } from './ReportExportButtons';
-import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
+import { downloadFile, generateCSV, reportFilename } from '@/lib/reports/export';
+import { printElementRef } from '@/services/reportPrintService';
 
 function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
   const formatted = formatCurrency(Math.abs(amount));
@@ -68,6 +69,8 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd,
 
   const formatMwk = (value: number) => format.currency(value, 'MWK');
   const periodLabel = t('reports.period', { start: format.date(periodStart), end: format.date(periodEnd) });
+  // Printed from the report card itself: same figures, same sections.
+  const reportContentRef = useRef<HTMLDivElement>(null);
   const businessBranding = brandBusiness
     ? businessRowToBranding(brandBusiness as Row<'businesses'>)
     : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
@@ -202,11 +205,16 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd,
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div ref={reportContentRef} className="overflow-x-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       {standalone ? (
         <ReportExportButtons
           onExportCSV={handleExportCSV}
-          onExportPDF={printReport}
+          onExportPDF={() => printElementRef(reportContentRef.current, {
+            title: t('reports.statementOfChangesInEquity'),
+            subtitle: periodLabel,
+            companyName: brandName,
+            orientation: 'landscape',
+          })}
         />
       ) : (
         <ReportHeader

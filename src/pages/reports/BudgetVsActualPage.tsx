@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Printer, Save, Target, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { printElementRef } from '@/services/reportPrintService';
 import type { BudgetAccountType, BudgetStatus, BudgetVsActualRow } from '@/dal/repositories/BudgetRepository';
 import type { Row } from '@/dal/types/database';
 import { repos } from '@/lib/repositories';
@@ -101,6 +102,8 @@ export function BudgetVsActualPage() {
   const [nextLineKey, setNextLineKey] = useState(1);
   const [lineError, setLineError] = useState('');
   const [lineSaved, setLineSaved] = useState(false);
+  // Declared with the other hooks: the page returns early while the budget loads.
+  const reportContentRef = useRef<HTMLDivElement>(null);
 
   const budgetQuery = useQuery({
     queryKey: ['budget', businessId, budgetId],
@@ -196,6 +199,16 @@ export function BudgetVsActualPage() {
   if (budgetQuery.isLoading) return <main className="p-6 text-sm text-gray-600" role="status">{t('budgets.loadingDetail')}</main>;
   if (budgetQuery.isError || !budget) return <main className="p-6 text-sm text-red-700" role="alert">{t('budgets.loadFailed')}</main>;
 
+  const printBudget = () => printElementRef(reportContentRef.current, {
+    title: budget.name,
+    subtitle: t('reports.period', {
+      start: formatDate(budget.period_start, i18n.language),
+      end: formatDate(budget.period_end, i18n.language),
+    }),
+    companyName: currentBusiness?.business?.name ?? undefined,
+    orientation: 'landscape',
+  });
+
   const renderRows = (type: BudgetAccountType, groupRows: BudgetVsActualRow[]) => {
     const budgeted = groupRows.reduce((sum, row) => sum + row.budgeted, 0);
     const actual = groupRows.reduce((sum, row) => sum + row.actual, 0);
@@ -235,7 +248,7 @@ export function BudgetVsActualPage() {
     <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Link to="/reports/budgets" className="inline-flex items-center gap-2 text-sm font-medium text-brand-700 hover:underline"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t('budgets.title')}</Link>
-        <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50"><Printer className="h-4 w-4" aria-hidden="true" />{t('budgets.print')}</button>
+        <button type="button" onClick={printBudget} className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50"><Printer className="h-4 w-4" aria-hidden="true" />{t('budgets.print')}</button>
       </div>
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -266,7 +279,7 @@ export function BudgetVsActualPage() {
       {statusMutation.isError && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">{t('budgets.saveFailed')}</p>}
       {reportQuery.isError && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">{t('budgets.reportFailed')}</p>}
       {reportQuery.isLoading ? <p role="status" className="text-sm text-gray-600">{t('budgets.loadingDetail')}</p> : (
-        <>
+        <div ref={reportContentRef} className="space-y-6">
           <section aria-label={t('budgets.title')} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {cards.map((card) => <article key={card.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <p className="text-sm text-gray-600">{card.label}</p>
@@ -290,7 +303,7 @@ export function BudgetVsActualPage() {
               </tr><tr><th colSpan={2} className="px-4 py-3 text-left">{t('budgets.net')}</th><td className="px-4 py-3 text-right">{formatMoney(summary.netBudgeted, i18n.language, currency)}</td><td className="px-4 py-3 text-right">{formatMoney(summary.netActual, i18n.language, currency)}</td><td className={`px-4 py-3 text-right ${summary.netVariance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatMoney(summary.netVariance, i18n.language, currency)}</td><td className="px-4 py-3 text-right">{summary.netBudgeted === 0 ? '—' : `${formatNumber((summary.netVariance / summary.netBudgeted) * 100, i18n.language)}%`}</td></tr></tfoot>
             </table>}
           </section>
-        </>
+        </div>
       )}
 
       {budget.status === 'draft' && <section className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 print:hidden">

@@ -1091,7 +1091,12 @@
       "integrityUnavailable": "Some integrity checks could not be completed. The report remains available for review.",
       "integrityClear": "No retained-earnings, bank-reconciliation, or fixed-asset warnings were found."
     },
-    "addNotes": "Add notes"
+    "addNotes": "Add notes",
+    "print": {
+      "generatedAt": "Generated: {{timestamp}}",
+      "footer": "Generated securely by Ledgr ERP",
+      "confidential": "Confidential"
+    }
   },
   "ai": {
     "title": "Ledgr AI",
@@ -2141,6 +2146,7 @@
       "title": "Payment Certificates",
       "description": "Certify amounts due from submitted or invoiced progress valuations, including construction deductions not represented by the valuation invoice.",
       "new": "New Certificate",
+      "print": "Print / Export PDF",
       "create": "Create Draft Certificate",
       "creating": "Creating…",
       "selectProject": "Project",

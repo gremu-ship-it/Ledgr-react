@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
-import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
+import { downloadFile, generateCSV, reportFilename } from '@/lib/reports/export';
+import { printElementRef } from '@/services/reportPrintService';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
 import { useAccessibleReportBranches } from '@/hooks/useAccessibleReportBranches';
@@ -172,6 +173,8 @@ export function BalanceSheetPage() {
   const { t, i18n } = useTranslation();
   const currentBusiness = useAppStore((state) => state.currentBusiness);
   const businessId = currentBusiness?.business?.id ?? '';
+  // The printed document is built from exactly what the screen shows.
+  const reportContentRef = useRef<HTMLElement>(null);
   const [asOfDate, setAsOfDate] = useState(() => balanceSheetDateForPreset('thisMonth'));
   const [activePreset, setActivePreset] = useState<ActiveDatePreset>('thisMonth');
   const [branchId, setBranchId] = useState<string | null>(null);
@@ -397,7 +400,12 @@ export function BalanceSheetPage() {
             </button>
             <ReportExportButtons
               onExportCSV={handleExportCSV}
-              onExportPDF={printReport}
+              onExportPDF={() => printElementRef(reportContentRef.current, {
+                title: t('reports.balanceSheet.title'),
+                subtitle: t('reports.balanceSheet.subtitle', { date: formatDate(asOfDate, i18n.language), branch: branchLabel }),
+                companyName: currentBusiness?.business?.name ?? undefined,
+                orientation: 'portrait',
+              })}
               disabled={isFetching || hasError || !hasActivity || !validAsOfDate}
             />
           </div>
@@ -457,7 +465,7 @@ export function BalanceSheetPage() {
         </section>
       )}
 
-      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm" aria-label={t('reports.balanceSheet.title')}>
+      <section ref={reportContentRef} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm" aria-label={t('reports.balanceSheet.title')}>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 sm:px-5">
           <h2 className="text-sm font-semibold text-gray-800">{t('reports.balanceSheet.title')}</h2>
           <div className="text-right text-xs text-gray-500">

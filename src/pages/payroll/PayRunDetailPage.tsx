@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { PayRunJournalEntryModal } from './PayRunJournalEntryModal';
 import { repos } from '@/lib/repositories';
+import { printElementRef } from '@/services/reportPrintService';
 import { useAppStore } from '@/store/useAppStore';
 import { asRow, asRows, employeeDisplayName, formatDate, numeric, text } from './employeeUtils';
 import { PayRunLinesTable, PayRunStatusBadge, PayRunSummaryCards } from './payRunComponents';
@@ -28,6 +29,8 @@ export function PayRunDetailPage() {
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((state) => state.currentBusiness);
   const businessId = currentBusiness?.business?.id ?? '';
+  // Payslips print from the dedicated print view, not from the app shell.
+  const printViewRef = useRef<HTMLElement>(null);
   const currency = currentBusiness?.business?.base_currency ?? 'MWK';
   const [confirmReverse, setConfirmReverse] = useState(false);
   const [selectedJournalEntryId, setSelectedJournalEntryId] = useState<string | null>(null);
@@ -132,7 +135,11 @@ export function PayRunDetailPage() {
   }
 
   const canApprove = status === 'calculated';
-  const printRun = () => window.print();
+  const printRun = () => printElementRef(printViewRef.current, {
+    title: t('payroll.printablePayslips'),
+    subtitle: formatDate(run.period_start, i18n.language) + ' – ' + formatDate(run.period_end, i18n.language),
+    companyName: currentBusiness?.business?.name ?? undefined,
+  });
   const payslipLines = lines;
 
   return (
@@ -211,7 +218,7 @@ export function PayRunDetailPage() {
         </section>
       </main>
 
-      <section id="pay-run-print-view" className="print-only" aria-label={t('payroll.printablePayslips')}>
+      <section id="pay-run-print-view" ref={printViewRef} className="print-only" aria-label={t('payroll.printablePayslips')}>
         {payslipLines.map((line, index) => {
           const employee = asRow(line.employee);
           const components = asRows(line.components);
