@@ -15310,6 +15310,33 @@ export type Database = {
         Returns: string
       }
       post_cash_deposit: { Args: { p_deposit_id: string }; Returns: string }
+      assign_financial_journal_cost_centre: {
+        Args: { p_entry_id: string; p_branch_id?: string | null; p_department_id?: string | null }
+        Returns: string
+      }
+      post_draft_financial_journal: {
+        Args: { p_entry_id: string; p_posted_by?: string | null }
+        Returns: string
+      }
+      post_financial_journal: {
+        Args: {
+          p_business_id: string
+          p_entry_date: string
+          p_description: string
+          p_reference?: string | null
+          p_source_type?: string | null
+          p_source_id?: string | null
+          p_lines?: Json
+          p_currency?: string | null
+          p_exchange_rate?: number | null
+          p_branch_id?: string | null
+          p_department_id?: string | null
+          p_status?: string | null
+          p_entry_number?: string | null
+          p_posting_key?: string | null
+        }
+        Returns: string
+      }
       void_cash_deposit: {
         Args: { p_deposit_id: string; p_reason: string }
         Returns: string

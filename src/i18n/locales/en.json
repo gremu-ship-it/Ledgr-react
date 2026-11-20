@@ -5262,5 +5262,15 @@
     "JOBTITLE": "Job Title",
     "HIREDATE": "Hire Date",
     "GROSSSALARY": "Gross Salary"
+  },
+  "journal": {
+    "errors": {
+      "unbalanced": "This journal entry does not balance. Debits must equal credits.",
+      "periodClosed": "That date falls in a closed accounting period. Record the correction in an open period.",
+      "unauthorized": "You do not have permission to post journals for this business.",
+      "alreadyPosted": "Only draft entries can be posted. Reverse a posted entry instead of posting it again.",
+      "notFound": "That journal entry was not found, or you no longer have access to it.",
+      "failed": "The journal could not be posted: {{reason}}"
+    }
   }
 }

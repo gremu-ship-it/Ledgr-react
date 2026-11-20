@@ -159,8 +159,10 @@ export async function postKeyedEntry(
 
   try {
     const { entry } = await repos.journal.createBalancedEntry(dto, lines);
-    await repos.journal.post(entry.id, null);
-    return entry;
+    // `post` returns the refreshed row: `createBalancedEntry` now always writes a
+    // draft (the command decides the status), so the inserted row alone would
+    // hand callers a stale `status: 'draft'` for an entry already on the books.
+    return await repos.journal.post(entry.id, null);
   } catch (err) {
     // Two attempts raced past the lookup; the unique index rejected the
     // duplicate. Resume whichever one landed first.
@@ -186,8 +188,7 @@ export async function postKeyedEntry(
       const unkeyed = { ...dto };
       delete unkeyed.posting_key;
       const { entry } = await repos.journal.createBalancedEntry(unkeyed, lines);
-      await repos.journal.post(entry.id, null);
-      return entry;
+      return await repos.journal.post(entry.id, null);
     }
 
     throw err;

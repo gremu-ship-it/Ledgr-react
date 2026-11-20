@@ -4,90 +4,112 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row } from '../../types/database';
 
 /**
- * PERF regression cover for the transaction save path.
+ * `JournalRepository.post()` is a command call now.
  *
- * JournalRepository.post() used to read the entry (findById) and then update
- * it — two sequential round trips on EVERY invoice/expense/payroll save. It
- * now enforces the same draft→posted immutability rule with a single
- * conditional UPDATE (.eq('id').eq('status','draft')), dropping to the
- * read-based path only when the conditional update matches nothing (rare
- * conflict/missing-row path) so the error semantics are preserved.
+ * The draft→posted transition used to be a conditional `UPDATE` on
+ * `journal_entries`, which the command-only RLS policy refuses
+ * (`journal_entries_command_update` is `USING (false)`), so every posting
+ * attempt failed with "new row violates row-level security policy".
+ *
+ * The transition now goes through `public.post_draft_financial_journal`, which
+ * holds the row lock, re-checks `can_write_financial_data`, refuses any
+ * non-draft entry, and fires the period-lock trigger. The repository still
+ * returns the stored row, so callers are unchanged.
  */
 
-const draftEntry = { id: 'je-1', status: 'draft' } as unknown as Row<'journal_entries'>;
+const postedEntry = {
+  id: 'je-1',
+  status: 'posted',
+  posted_by: 'user-1',
+} as unknown as Row<'journal_entries'>;
 
 function makeClient(overrides: {
-  updateResult?: { data: Row<'journal_entries'> | null; error: unknown };
-  findByIdResult?: { data: Row<'journal_entries'> | null; error: unknown };
+  rpcResult?: { data: unknown; error: unknown };
+  row?: Row<'journal_entries'> | null;
 } = {}) {
-  const conditionalUpdate = vi.fn().mockResolvedValue(
-    overrides.updateResult ?? { data: { ...draftEntry, status: 'posted' }, error: null },
-  );
-  const selectAfterEq = vi.fn(() => ({ maybeSingle: conditionalUpdate }));
-  const secondEq = vi.fn(() => ({ select: selectAfterEq }));
-  const firstEq = vi.fn(() => ({ eq: secondEq, select: selectAfterEq }));
+  const rpc = vi.fn().mockResolvedValue(overrides.rpcResult ?? { data: 'je-1', error: null });
 
-  const update = vi.fn(() => ({ eq: firstEq }));
-
-  const maybeSingleFind = vi.fn().mockResolvedValue(
-    overrides.findByIdResult ?? { data: draftEntry, error: null },
-  );
-  const eqFind = vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: maybeSingleFind })), maybeSingle: maybeSingleFind }));
-  const selectRoot = vi.fn(() => ({ eq: eqFind }));
-
-  const from = vi.fn(() => ({ update, select: selectRoot }));
+  const maybeSingle = vi.fn().mockResolvedValue({
+    data: overrides.row === undefined ? postedEntry : overrides.row,
+    error: null,
+  });
+  const eq = vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle })), maybeSingle }));
+  const select = vi.fn(() => ({ eq }));
+  const update = vi.fn();
+  const insert = vi.fn();
+  const del = vi.fn();
+  const from = vi.fn(() => ({ select, update, insert, delete: del }));
 
   return {
-    client: { from } as unknown as SupabaseClient<Database>,
-    spies: { from, update, firstEq, secondEq, selectAfterEq, conditionalUpdate, maybeSingleFind },
+    client: { from, rpc } as unknown as SupabaseClient<Database>,
+    spies: { from, rpc, select, eq, maybeSingle, update, insert, del },
   };
 }
 
-describe('JournalRepository.post fast path', () => {
-  it('posts with a single conditional UPDATE round trip (no prior read)', async () => {
+describe('JournalRepository.post command', () => {
+  it('posts through the SECURITY DEFINER command and never writes the table directly', async () => {
     const { client, spies } = makeClient();
     const repo = new JournalRepository(client);
 
     const result = await repo.post('je-1', 'user-1');
 
+    expect(spies.rpc).toHaveBeenCalledTimes(1);
+    expect(spies.rpc).toHaveBeenCalledWith('post_draft_financial_journal', {
+      p_entry_id: 'je-1',
+      p_posted_by: 'user-1',
+    });
+    // The command-only policy is the boundary: the client must not attempt DML.
+    expect(spies.update).not.toHaveBeenCalled();
+    expect(spies.insert).not.toHaveBeenCalled();
+    expect(spies.del).not.toHaveBeenCalled();
+
     expect(result.status).toBe('posted');
-    expect(spies.update).toHaveBeenCalledTimes(1);
-    expect(spies.firstEq).toHaveBeenCalledWith('id', 'je-1');
-    expect(spies.secondEq).toHaveBeenCalledWith('status', 'draft');
-    // The draft-read fallback must NOT run on the happy path.
-    expect(spies.maybeSingleFind).not.toHaveBeenCalled();
   });
 
-  it('null posted_by is accepted (system posts)', async () => {
-    const { client } = makeClient();
+  it('accepts a null posted_by (system posts) and still returns the stored row', async () => {
+    const { client, spies } = makeClient();
     const repo = new JournalRepository(client);
-    await expect(repo.post('je-1', null)).resolves.toBeDefined();
-  });
 
-  it('surfaces update errors without a fallback read', async () => {
-    const { client, spies } = makeClient({
-      updateResult: { data: null, error: { message: 'RLS violation', code: '42501' } },
+    await expect(repo.post('je-1', null)).resolves.toMatchObject({ id: 'je-1' });
+    expect(spies.rpc).toHaveBeenCalledWith('post_draft_financial_journal', {
+      p_entry_id: 'je-1',
+      p_posted_by: null,
     });
-    const repo = new JournalRepository(client);
-    await expect(repo.post('je-1', null)).rejects.toThrow();
-    expect(spies.maybeSingleFind).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundError when the conditional update matches nothing and the entry does not exist', async () => {
+  it('surfaces a permission refusal from the command', async () => {
     const { client } = makeClient({
-      updateResult: { data: null, error: null },
-      findByIdResult: { data: null, error: null },
+      rpcResult: {
+        data: null,
+        error: { code: '42501', message: 'Not authorised to post financial journals for this business.' },
+      },
     });
     const repo = new JournalRepository(client);
-    await expect(repo.post('missing', null)).rejects.toThrow(/was not found/i);
+
+    await expect(repo.post('je-1', 'user-1')).rejects.toThrow(/not authori[sz]ed/i);
   });
 
-  it('throws the immutability error when the entry is not in draft', async () => {
+  it('surfaces the draft-only immutability rule with the server message', async () => {
     const { client } = makeClient({
-      updateResult: { data: null, error: null },
-      findByIdResult: { data: { id: 'je-1', status: 'posted' } as unknown as Row<'journal_entries'>, error: null },
+      rpcResult: {
+        data: null,
+        error: {
+          code: '22023',
+          message: "Cannot post journal entry je-1: current status is 'posted'. Only 'draft' entries may be posted. To correct a posted entry, create a reversal.",
+        },
+      },
     });
     const repo = new JournalRepository(client);
+
     await expect(repo.post('je-1', null)).rejects.toThrow(/Only 'draft' entries may be posted/);
+  });
+
+  it('surfaces a missing entry as a not-found style refusal', async () => {
+    const { client } = makeClient({
+      rpcResult: { data: null, error: { code: '22023', message: 'Journal entry missing was not found.' } },
+    });
+    const repo = new JournalRepository(client);
+
+    await expect(repo.post('missing', null)).rejects.toThrow(/was not found/i);
   });
 });
