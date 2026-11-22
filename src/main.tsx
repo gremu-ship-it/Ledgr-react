@@ -11,6 +11,7 @@ import './index.css';
 import './i18n';
 import App from './App.tsx';
 import { registerLedgrServiceWorker } from '@/offline/registerServiceWorker';
+import { registerServiceWorker } from './registerServiceWorker';
 import { isDemoMode } from '@/lib/demo/mode';
 import { loadDemoClient } from '@/lib/demo/loader';
 
@@ -30,6 +31,7 @@ if (typeof window !== 'undefined') {
   // Register early so Workbox can precache the app shell and begin managing
   // updates. The wrapper also exposes registration lifecycle events to React.
   registerLedgrServiceWorker();
+  registerServiceWorker();
 }
 
 // --- Sentry (frontend) ------------------------------------------------------

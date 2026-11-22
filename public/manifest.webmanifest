@@ -1,0 +1,46 @@
+{
+  "name": "Ledgr ERP",
+  "short_name": "Ledgr",
+  "description": "Enterprise Local-First ERP & Accounting Platform",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/vite.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "POS Terminal",
+      "short_name": "POS",
+      "url": "/pos",
+      "description": "Open Retail Point of Sale"
+    },
+    {
+      "name": "New Invoice",
+      "short_name": "Invoice",
+      "url": "/invoices/new",
+      "description": "Create a new customer invoice"
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Executive Financial Hub"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"]
+}
