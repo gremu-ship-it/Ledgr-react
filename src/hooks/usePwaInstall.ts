@@ -40,7 +40,7 @@ export function usePwaInstall() {
       window.removeEventListener('beforeinstallprompt', handler);
       window.removeEventListener('appinstalled', installedHandler);
     };
-  }, []);
+  }, [isInstalled]);
 
   const promptInstall = async (): Promise<boolean> => {
     if (!deferredPrompt) return false;
