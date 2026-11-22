@@ -394,8 +394,19 @@ async function ensureProjectBoq(projectId: string, contractSum: number) {
     const found = existing.find((line) => line.line_number === definition.line_number && line.description === definition.description);
     return { id: found?.id ?? null, ...definition, _deleted: false };
   });
-  const result = await repos.projects.bulkUpsertBoqLines(projectId, lines);
-  if (result.length >= 3) return result;
+  if (lines.every((line) => line.id !== null)) {
+    return existing;
+  }
+  try {
+    const result = await repos.projects.bulkUpsertBoqLines(projectId, lines);
+    if (result.length >= 3) return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes('BOQ is locked')) {
+      throw err;
+    }
+    console.warn('[DemoSeeder] Skipping BOQ upsert: BOQ is locked');
+  }
   return repos.projects.getBoqLines(projectId);
 }
 
