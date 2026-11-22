@@ -5272,5 +5272,41 @@
       "notFound": "That journal entry was not found, or you no longer have access to it.",
       "failed": "The journal could not be posted: {{reason}}"
     }
+  },
+  "subscription": {
+    "errors": {
+      "clockTampered": "System clock rollback detected. Connect to the internet to verify your subscription.",
+      "noLease": "No active offline license found. Connect to the internet to initialize.",
+      "gracePeriodWarning": "Offline subscription lease expires in {{days}} days. Connect to the internet to refresh.",
+      "leaseExpired": "Offline subscription lease has expired. Application is in read-only mode until reconnected."
+    },
+    "lease": {
+      "statusActive": "Offline License Active ({{days}} days remaining)",
+      "refreshButton": "Refresh License"
+    }
+  },
+  "offline": {
+    "syncStatus": "Offline Local Store Active",
+    "pendingItems": "{{count}} pending sync items",
+    "synced": "All local changes synced with cloud",
+    "exportBackup": "Export Local Backup (.ledgr)",
+    "importBackup": "Restore Local Backup",
+    "backupSuccess": "Local backup exported successfully",
+    "restoreSuccess": "{{count}} local records restored successfully"
+  },
+  "pwa": {
+    "installDesktop": "Install Desktop App",
+    "desktopAppActive": "Desktop App",
+    "installTooltip": "Download and install Ledgr ERP as a standalone desktop application",
+    "installedTooltip": "Running natively as an installed desktop application"
+  },
+  "localData": {
+    "title": "Local Data & Offline License",
+    "description": "Manage your local desktop database, export offline backups, and verify subscription lease.",
+    "leaseStatus": "Offline Subscription Status",
+    "activeDays": "{{days}} days offline remaining",
+    "exportButton": "Download Local Backup (.ledgr)",
+    "importButton": "Restore from Backup File",
+    "storagePersistent": "Persistent Local Storage Active"
   }
 }
