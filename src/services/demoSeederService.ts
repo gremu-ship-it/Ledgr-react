@@ -1,3 +1,4 @@
+import type { Project } from '@/dal/repositories/ProjectRepository';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { deriveClientKey } from '@/lib/clientKeys';
 import { repos } from '@/lib/repositories';
@@ -329,6 +330,33 @@ async function seedCashDeposit(
   await repos.cashDeposit.post(draft.id);
 }
 
+/** Project states in which progress billing, certificates and progress entries are allowed. */
+export const SEEDED_PROJECT_ACTIVE_STATUS = 'active' as const;
+
+/**
+ * `create_project` always inserts a project at `tender` (the column default),
+ * and both `create_valuation` and `update_valuation` refuse anything but an
+ * `active` project ("Only active projects can have valuations."). Demo seeding
+ * attaches valuations, certificates, RFIs, change orders and schedule progress
+ * to these projects, so every seeded project must be advanced to `active`
+ * first — including on re-runs, which repairs projects left at `tender` by an
+ * earlier interrupted seed.
+ */
+export async function ensureSeededProjectActive(project: Project): Promise<Project> {
+  if (project.status === SEEDED_PROJECT_ACTIVE_STATUS) return project;
+  if (project.status !== 'tender') {
+    throw new Error(
+      `Demo project "${project.name}" is '${project.status}'. `
+      + 'Demo progress data requires an active project; reset the Demo company before re-seeding.',
+    );
+  }
+  return repos.projects.transitionStatus(
+    project.id,
+    SEEDED_PROJECT_ACTIVE_STATUS,
+    'Demo seed: project is active and in delivery.',
+  );
+}
+
 async function ensureProject(businessId: string, input: {
   name: string;
   clientName: string;
@@ -337,11 +365,11 @@ async function ensureProject(businessId: string, input: {
   retention: number;
   startDate: string;
   endDate: string;
-}) {
+}): Promise<Project> {
   const projects = (await repos.projects.list(businessId)).rows;
   const existing = projects.find((project) => project.name === input.name);
-  if (existing) return existing;
-  return repos.projects.create(businessId, {
+  if (existing) return ensureSeededProjectActive(existing);
+  const created = await repos.projects.create(businessId, {
     name: input.name,
     client_name: input.clientName,
     client_id: input.clientId,
@@ -351,6 +379,7 @@ async function ensureProject(businessId: string, input: {
     start_date: input.startDate,
     end_date: input.endDate,
   });
+  return ensureSeededProjectActive(created);
 }
 
 async function ensureProjectBoq(projectId: string, contractSum: number) {
