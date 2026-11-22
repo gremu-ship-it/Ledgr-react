@@ -461,26 +461,34 @@ async function seedConstruction(
   }
   if (certificate.status === 'draft') await repos.certificates.issue(certificate.id, daysAgo(-30));
 
-  const rfis = await repos.rfi.listByBusiness(businessId);
-  let answered = rfis.find((rfi) => rfi.rfi_number === 'DEMO-RFI-02');
-  if (!rfis.some((rfi) => rfi.rfi_number === 'DEMO-RFI-01')) {
-    await repos.rfi.create({
-      business_id: businessId, project_id: capital.id, site_id: null,
-      rfi_number: 'DEMO-RFI-01', title: 'Confirm foundation reinforcement detail',
-      question: 'Confirm the reinforcement arrangement for the tower foundation.',
-      priority: 'normal', due_date: daysAgo(-7),
-    });
-  }
-  if (!answered) {
-    answered = await repos.rfi.create({
-      business_id: businessId, project_id: capital.id, site_id: null,
-      rfi_number: 'DEMO-RFI-02', title: 'Confirm slab edge detail',
-      question: 'Confirm the slab-edge detail for the level-two pour.',
-      priority: 'normal', due_date: daysAgo(4),
-    });
-  }
-  if (answered.status !== 'answered' && answered.status !== 'closed') {
-    await repos.rfi.transitionStatus(answered.id, 'answered', 'Detail confirmed for the demo dataset.');
+  try {
+    const rfis = await repos.rfi.listByBusiness(businessId);
+    let answered = rfis.find((rfi) => rfi.rfi_number === 'DEMO-RFI-02');
+    if (!rfis.some((rfi) => rfi.rfi_number === 'DEMO-RFI-01')) {
+      await repos.rfi.create({
+        business_id: businessId, project_id: capital.id, site_id: null,
+        rfi_number: 'DEMO-RFI-01', title: 'Confirm foundation reinforcement detail',
+        question: 'Confirm the reinforcement arrangement for the tower foundation.',
+        priority: 'normal', due_date: daysAgo(-7),
+      });
+    }
+    if (!answered) {
+      answered = await repos.rfi.create({
+        business_id: businessId, project_id: capital.id, site_id: null,
+        rfi_number: 'DEMO-RFI-02', title: 'Confirm slab edge detail',
+        question: 'Confirm the slab-edge detail for the level-two pour.',
+        priority: 'normal', due_date: daysAgo(4),
+      });
+    }
+    if (answered.status !== 'answered' && answered.status !== 'closed') {
+      await repos.rfi.transitionStatus(answered.id, 'answered', 'Detail confirmed for the demo dataset.');
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes('Not authorized') && !msg.includes('project.rfi.manage')) {
+      throw err;
+    }
+    console.warn('[DemoSeeder] Skipping construction RFIs: project.rfi.manage capability not granted');
   }
 
   const changeOrders = await repos.changeOrder.list(businessId, { projectId: capital.id });
