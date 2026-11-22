@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
+import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
 import { useAccessibleReportBranches } from '@/hooks/useAccessibleReportBranches';
 import { ReportRepository, type TrialBalanceRow } from '@/dal/repositories/ReportRepository';
 import { classifyTaxAccounts, type TaxAccount } from '@/lib/tax-accounts';
 import { downloadFile, generateCSV, reportFilename } from '@/lib/reports/export';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
+import { printElementRef } from '@/services/reportPrintService';
 
 type VatPeriodType = 'monthly' | 'quarterly' | 'ytd';
 interface DateRange { from: string; to: string }
@@ -113,6 +115,9 @@ export function VatReturnPage() {
   const [branchId, setBranchId] = useState<string | null>(null);
   const period = useMemo(() => rangeForVatPeriod(periodType, year, selection), [periodType, year, selection]);
   const { data: branches = [] } = useAccessibleReportBranches(businessId);
+  // The printable document: the summary and detail tables, without the filter
+  // card or action buttons that sit above them.
+  const reportContentRef = useRef<HTMLDivElement>(null);
   const branchLabel = branchId
     ? branches.find((branch) => branch.id === branchId)?.name ?? t('reports.shared.selectedBranch')
     : t('reports.shared.allBranches');
@@ -221,10 +226,15 @@ export function VatReturnPage() {
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
             {t('reports.shared.runReport')}
           </button>
-          <button type="button" onClick={handleExportCSV} disabled={isFetching || hasError || !hasActivity || !validPeriod} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
-            <Download className="h-4 w-4" aria-hidden="true" />
-            {t('reports.shared.exportCSV')}
-          </button>
+          <ReportExportButtons
+            onExportCSV={handleExportCSV}
+            onExportPDF={() => printElementRef(reportContentRef.current, {
+              title: t('reports.vatReturn.title'),
+              subtitle: t('reports.vatReturn.subtitle', { from: formatDate(period.from, i18n.language), to: formatDate(period.to, i18n.language), branch: branchLabel }),
+              companyName: currentBusiness?.business?.name ?? undefined,
+            })}
+            disabled={isFetching || hasError || !hasActivity || !validPeriod}
+          />
         </div>
       </section>
 
@@ -233,6 +243,9 @@ export function VatReturnPage() {
         <button type="button" onClick={runReport} className="font-semibold underline">{t('common.retry')}</button>
       </div>}
 
+      {/* Printable document: summary + detail tables. Filters, actions and
+          status notices stay outside so the PDF is only the report. */}
+      <div ref={reportContentRef}>
       <section aria-label={t('reports.vatReturn.summary')} className="mb-6">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">{t('reports.vatReturn.summary')}</h2>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -250,9 +263,9 @@ export function VatReturnPage() {
       </section>
 
       {!isFetching && !hasError && !hasActivity && (
-        <p role="status" className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">{t('reports.vatReturn.noData')}</p>
+        <p role="status" data-print-ignore className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">{t('reports.vatReturn.noData')}</p>
       )}
-      {isFetching && <p role="status" className="mb-4 text-sm text-gray-500">{t('reports.shared.loading')}</p>}
+      {isFetching && <p role="status" data-print-ignore className="mb-4 text-sm text-gray-500">{t('reports.shared.loading')}</p>}
 
       <section aria-label={t('reports.vatReturn.details')} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-4 py-3 sm:px-5"><h2 className="text-sm font-semibold text-gray-800">{t('reports.vatReturn.details')}</h2></div>
@@ -274,6 +287,7 @@ export function VatReturnPage() {
           </table>
         </div>
       </section>
+      </div>
     </main>
   );
 }

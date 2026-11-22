@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
+import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
 import { useAccessibleReportBranches } from '@/hooks/useAccessibleReportBranches';
 import { classifyTaxAccounts, type TaxAccount } from '@/lib/tax-accounts';
 import { downloadFile, generateCSV, reportFilename } from '@/lib/reports/export';
 import { fetchAllRows } from '@/lib/paginateQuery';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
+import { printElementRef } from '@/services/reportPrintService';
 
 interface DateRange { from: string; to: string }
 interface WhtJournalLine {
@@ -103,6 +105,9 @@ export function WhtSchedulePage() {
     to: dateFor(year, month, 0),
   }), [year, month]);
   const { data: branches = [] } = useAccessibleReportBranches(businessId);
+  // The printable document: the summary and detail tables, without the filter
+  // card or action buttons that sit above them.
+  const reportContentRef = useRef<HTMLDivElement>(null);
   const branchLabel = branchId
     ? branches.find((branch) => branch.id === branchId)?.name ?? t('reports.shared.selectedBranch')
     : t('reports.shared.allBranches');
@@ -213,10 +218,15 @@ export function WhtSchedulePage() {
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
             {t('reports.shared.runReport')}
           </button>
-          <button type="button" onClick={handleExportCSV} disabled={isFetching || hasError || !hasActivity} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
-            <Download className="h-4 w-4" aria-hidden="true" />
-            {t('reports.shared.exportCSV')}
-          </button>
+          <ReportExportButtons
+            onExportCSV={handleExportCSV}
+            onExportPDF={() => printElementRef(reportContentRef.current, {
+              title: t('reports.whtSchedule.title'),
+              subtitle: t('reports.whtSchedule.subtitle', { from: formatDate(period.from, i18n.language), to: formatDate(period.to, i18n.language), branch: branchLabel }),
+              companyName: currentBusiness?.business?.name ?? undefined,
+            })}
+            disabled={isFetching || hasError || !hasActivity}
+          />
         </div>
       </section>
 
@@ -225,6 +235,8 @@ export function WhtSchedulePage() {
         <button type="button" onClick={runReport} className="font-semibold underline">{t('common.retry')}</button>
       </div>}
 
+      {/* Printable document: summary + detail tables only. */}
+      <div ref={reportContentRef}>
       <section aria-label={t('reports.whtSchedule.summary')} className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-4 py-3 sm:px-5"><h2 className="text-sm font-semibold text-gray-800">{t('reports.whtSchedule.summary')}</h2></div>
         <div className="overflow-x-auto">
@@ -242,7 +254,7 @@ export function WhtSchedulePage() {
         </div>
       </section>
 
-      {isFetching && <p role="status" className="mb-4 text-sm text-gray-500">{t('reports.shared.loading')}</p>}
+      {isFetching && <p role="status" data-print-ignore className="mb-4 text-sm text-gray-500">{t('reports.shared.loading')}</p>}
       <section aria-label={t('reports.whtSchedule.details')} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-4 py-3 sm:px-5"><h2 className="text-sm font-semibold text-gray-800">{t('reports.whtSchedule.details')}</h2></div>
         <div className="overflow-x-auto">
@@ -257,6 +269,7 @@ export function WhtSchedulePage() {
           </table>
         </div>
       </section>
+      </div>
     </main>
   );
 }
