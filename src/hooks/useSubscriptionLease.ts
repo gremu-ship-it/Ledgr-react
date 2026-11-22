@@ -16,34 +16,29 @@ const DEFAULT_EVALUATION: LeaseEvaluation = {
 };
 
 export function useSubscriptionLease(businessId: string | null | undefined) {
-  const [evaluation, setEvaluation] = useState<LeaseEvaluation>(() =>
-    businessId ? evaluateLease(businessId) : DEFAULT_EVALUATION
-  );
+  const [refreshTick, setRefreshTick] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const evaluation = useMemo<LeaseEvaluation>(() => {
+    void refreshTick;
+    return businessId ? evaluateLease(businessId) : DEFAULT_EVALUATION;
+  }, [businessId, refreshTick]);
+
   const reevaluate = useCallback(() => {
-    if (!businessId) {
-      setEvaluation(DEFAULT_EVALUATION);
-      return;
-    }
-    setEvaluation(evaluateLease(businessId));
-  }, [businessId]);
+    setRefreshTick((tick) => tick + 1);
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!businessId) return null;
     setIsRefreshing(true);
     try {
       const lease = await refreshSubscriptionLease(businessId);
-      setEvaluation(evaluateLease(businessId));
+      setRefreshTick((tick) => tick + 1);
       return lease;
     } finally {
       setIsRefreshing(false);
     }
   }, [businessId]);
-
-  useEffect(() => {
-    reevaluate();
-  }, [reevaluate]);
 
   useEffect(() => {
     if (!businessId) return;
