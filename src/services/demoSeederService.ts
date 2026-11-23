@@ -401,7 +401,7 @@ async function ensureProjectBoq(projectId: string, contractSum: number) {
     const result = await repos.projects.bulkUpsertBoqLines(projectId, lines);
     if (result.length >= 3) return result;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
     if (!msg.includes('BOQ is locked')) {
       throw err;
     }
@@ -495,7 +495,7 @@ async function seedConstruction(
       await repos.rfi.transitionStatus(answered.id, 'answered', 'Detail confirmed for the demo dataset.');
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
     if (!msg.includes('Not authorized') && !msg.includes('project.rfi.manage')) {
       throw err;
     }
