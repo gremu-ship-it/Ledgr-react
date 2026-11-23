@@ -564,8 +564,20 @@ async function seedConstruction(
   if (purchaseOrderId) {
     const purchaseOrder = (await repos.construction.findPurchaseOrders(businessId, highway.id))
       .find((po) => po.id === purchaseOrderId);
-    if (purchaseOrder?.status === 'draft') await repos.construction.authorizePurchaseOrder(purchaseOrderId);
-    const poLines = await repos.construction.findPurchaseOrderLines(purchaseOrderId);
+    let isPoAuthorized = purchaseOrder?.status !== 'draft';
+    if (purchaseOrder?.status === 'draft') {
+      try {
+        await repos.construction.authorizePurchaseOrder(purchaseOrderId);
+        isPoAuthorized = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
+        if (!msg.includes('Authorization requires a different person')) {
+          throw err;
+        }
+        console.warn('[DemoSeeder] Skipping PO authorization: segregation of duties requires a different user');
+      }
+    }
+    const poLines = isPoAuthorized ? await repos.construction.findPurchaseOrderLines(purchaseOrderId) : [];
     const poLine = poLines[0];
     if (poLine) {
       await repos.construction.recordGoodsReceipt({
