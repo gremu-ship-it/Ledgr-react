@@ -31,9 +31,14 @@ describe('dashboard period and query helpers', () => {
     });
   });
 
-  it('excludes draft and void expenses consistently while retaining other statuses', () => {
-    expect(isDashboardExpenseIncluded('draft')).toBe(false);
+  it('excludes only void expenses, keeping draft bills in the totals', () => {
+    // Regression: the bill builder writes supplier bills as `draft` while
+    // posting DR Inventory / CR Trade Creditors immediately. Excluding drafts
+    // here dropped a MK 4,000,000 purchase out of every dashboard total even
+    // though the ledger carried it.
     expect(isDashboardExpenseIncluded('void')).toBe(false);
+    expect(isDashboardExpenseIncluded('draft')).toBe(true);
+    expect(isDashboardExpenseIncluded('approved')).toBe(true);
     expect(isDashboardExpenseIncluded('paid')).toBe(true);
     expect(isDashboardExpenseIncluded('pending')).toBe(true);
     expect(isDashboardExpenseIncluded(undefined)).toBe(true);
