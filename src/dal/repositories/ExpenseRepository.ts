@@ -3,6 +3,10 @@ import type { Database, Row, InsertDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 import { fetchAllRows } from '@/lib/paginateQuery';
+import { expenseStatusFromAmounts } from '@/lib/paymentStatus';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ExpenseRepository');
 
 export type OutstandingExpense = Pick<
   Row<'expenses'>,
@@ -17,6 +21,24 @@ export type OutstandingExpense = Pick<
   | 'functional_currency'
   | 'exchange_rate'
 >;
+
+/**
+ * Expense statuses that can never be owed.
+ *
+ * Deliberately does NOT include `draft`. A bill saved in the Expense Builder
+ * posts its journal entry — DR Inventory / CR Trade Creditors — immediately,
+ * so the liability is real the moment the bill exists, whatever its status
+ * says. Bills used to be written as `draft` and this filter excluded drafts,
+ * so every bill recorded through the app silently vanished from the payables
+ * summary: a MK 4,000,000 supplier bill moved the ledger and showed nothing on
+ * the dashboard. Bills are now saved as `approved`, and drafts are counted too
+ * so any pre-existing draft bill (or one written by an older client) still
+ * appears instead of disappearing.
+ *
+ * The settled case is handled by the amount comparison, not by status, so a
+ * partially paid bill of any status still reports its balance.
+ */
+const UNSETTLED_EXPENSE_STATUSES = ['void', 'rejected', 'cancelled'] as const;
 
 export interface ExpenseWithLines {
   expense: Row<'expenses'>;
@@ -137,9 +159,12 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
   }
 
   /**
-   * Fetch unpaid, non-void expenses for the dashboard AP summary. Use a
+   * Fetch unpaid expenses for the dashboard AP summary. Use a
    * column-trimmed projection and page past PostgREST's default row cap so the
    * total is not silently truncated for larger businesses.
+   *
+   * Includes `draft` (see UNSETTLED_EXPENSE_STATUSES): a draft bill has already
+   * credited Trade Creditors, so excluding it hid real money owed.
    */
   async findOutstanding(businessId: string): Promise<OutstandingExpense[]> {
     const query = this.client
@@ -147,7 +172,7 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
       .select('id, expense_number, status, due_date, expense_date, total_amount, amount_paid, functional_amount, functional_currency, exchange_rate')
       .eq('business_id', businessId)
       .is('deleted_at', null)
-      .not('status', 'in', '(draft,void,rejected,cancelled,paid)');
+      .not('status', 'in', `(${[...UNSETTLED_EXPENSE_STATUSES, 'paid'].join(',')})`);
 
     try {
       const rows = await fetchAllRows<OutstandingExpense>(query);
@@ -250,6 +275,72 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
       throw toRepositoryError('expense_payments', { message: 'Payment command returned no result; the payment was not confirmed.' });
     }
     return { payment: data.payment, expense: data.expense, journalEntryId: data.journal_entry_id, idempotent: data.idempotent };
+  }
+
+  /**
+   * Record a payment against a bill and move the bill's status with it.
+   *
+   * `recordPayment` above is the atomic server command and does everything
+   * financial: the payment row, `amount_paid`, the DR Trade Creditors /
+   * CR Cash settlement entry, and the overpayment guard — all under one lock.
+   * What it deliberately does NOT do is touch `expenses.status` (see the
+   * header of 20261011000002: "Expense status is untouched (parity with the
+   * old path)"). That left a bill sitting on `draft` no matter how much had
+   * been paid against it, so the payables summary and the expense list both
+   * kept describing it as an untouched draft.
+   *
+   * This wrapper keeps the command as the source of financial truth and adds
+   * the one thing the UI needs: the status catches up with the amounts.
+   * Status is derived from the amounts the command returned, so it can never
+   * disagree with `amount_paid`.
+   *
+   * The status write happens AFTER the payment has committed, and it is
+   * best-effort on purpose: a bill in a closed accounting period is guarded by
+   * `trg_aa_period_lock`, so writing its status would throw even though the
+   * money has already moved and `amount_paid` is already correct. Failing the
+   * call there would show the user an error for a payment that succeeded —
+   * far worse than a stale status on a settled bill, which the payables
+   * surfaces do not depend on (they read the balance from the amounts).
+   */
+  async recordPaymentForBill(
+    payment: InsertDto<'expense_payments'>,
+    clientKey?: string,
+  ): Promise<{ payment: Row<'expense_payments'>; expense: Row<'expenses'>; journalEntryId?: string | null }> {
+    const result = await this.recordPayment(payment, clientKey);
+
+    const total = Number(result.expense.total_amount);
+    const paid = Number(result.expense.amount_paid);
+    const nextStatus = expenseStatusFromAmounts(total, paid);
+
+    if (result.expense.status === 'void') {
+      // The command refuses a payment on a void document, so this is defensive
+      // only — never resurrect a voided bill through a status write.
+      return result;
+    }
+
+    if (result.expense.status === nextStatus) return result;
+
+    const { data, error } = await this.client
+      .from('expenses')
+      .update({ status: nextStatus } as never)
+      .eq('id', result.expense.id)
+      .eq('business_id', result.expense.business_id)
+      .select('*')
+      .single();
+
+    if (error) {
+      log.warn('Bill payment recorded but its status could not be updated', {
+        expenseId: result.expense.id,
+        attemptedStatus: nextStatus,
+        message: error.message,
+      });
+      return { ...result, expense: { ...result.expense, status: nextStatus } };
+    }
+
+    return {
+      ...result,
+      expense: (data as Row<'expenses'>) ?? { ...result.expense, status: nextStatus },
+    };
   }
 
   /**

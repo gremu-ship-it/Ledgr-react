@@ -5,6 +5,7 @@ import { BaseRepository } from './BaseRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
 import { createLogger } from '@/lib/logger';
 import { paymentStatusFromAmounts } from '@/lib/paymentStatus';
+import { reverseStockBroughtInByDocument, type StockReversalResult } from '@/services/voidStockReversal';
 
 const log = createLogger('JournalRepository');
 
@@ -12,6 +13,25 @@ export interface JournalEntryWithLines {
   entry: Row<'journal_entries'>;
   lines: Row<'journal_lines'>[];
 }
+
+/**
+ * What a reversal did beyond the ledger.
+ *
+ * `stockReversal` is reported rather than thrown because unwinding stock is a
+ * best-effort companion to the reversal: the entry and its source document are
+ * already void by the time it runs, so a failure must surface as a warning on
+ * a successful reversal, not as an error that suggests nothing happened.
+ */
+export interface JournalReversalResult extends JournalEntryWithLines {
+  stockReversal: StockReversalResult;
+}
+
+const EMPTY_STOCK_REVERSAL: StockReversalResult = {
+  movementsReversed: 0,
+  quantityReversed: 0,
+  valueReversed: 0,
+  recorded: false,
+};
 
 export class JournalRepository extends BaseRepository<'journal_entries'> {
   constructor(client: SupabaseClient<Database>) {
@@ -239,7 +259,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     reversalDate: string,
     postedBy: string,
     reason: string,
-  ): Promise<JournalEntryWithLines> {
+  ): Promise<JournalReversalResult> {
     if (!reason || !reason.trim()) {
       throw new ValidationError(
         'journal_entries',
@@ -335,8 +355,21 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     // invoice/expense/payroll run must be voided too, otherwise it keeps
     // counting in dashboard/report totals even though its ledger effect
     // has been fully reversed.
+    let stockReversal: StockReversalResult = EMPTY_STOCK_REVERSAL;
     if (!invPayment && !expPayment && original.source_id && original.source_type && original.source_type !== 'reversal') {
       await this.voidSourceRecord(original.source_type, original.source_id, postedBy, reason);
+      // Voiding the ledger side alone leaves any stock the document brought in
+      // sitting in inventory_balances (production: EXP-0478, 1,100 bags). Give
+      // it back so the subledger matches the entry we just reversed.
+      stockReversal = await this.reverseStockForVoidedSource({
+        businessId: original.business_id,
+        sourceType: original.source_type,
+        sourceId: original.source_id,
+        reference: original.entry_number,
+        reason,
+        createdBy: postedBy,
+        reversalDate,
+      });
     }
 
     await this.writeAuditLog({
@@ -351,7 +384,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       notes: reason,
     });
 
-    return { entry: postedReversal, lines: reversalLines };
+    return { entry: postedReversal, lines: reversalLines, stockReversal };
   }
 
   /**
@@ -447,6 +480,39 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     });
 
     if (error) throw toRepositoryError('journal_entries', error);
+  }
+
+  /**
+   * Gives back any stock the voided source document brought in.
+   *
+   * Scoped to expenses on purpose: an expense bill is what creates `purchase`
+   * movements (via `addStockForBranchPurchase`), and that receipt surviving the
+   * void is the bug this closes. Every other source type is a no-op.
+   *
+   * Kept here rather than inline in `reverse()` so the reason for the call sits
+   * next to the code that voids the document itself.
+   */
+  private async reverseStockForVoidedSource(params: {
+    businessId: string;
+    sourceType: string;
+    sourceId: string;
+    reference: string | null;
+    reason: string;
+    createdBy: string | null;
+    reversalDate: string;
+  }): Promise<StockReversalResult> {
+    const STOCK_BEARING_SOURCES = new Set(['expense']);
+    if (!STOCK_BEARING_SOURCES.has(params.sourceType)) return EMPTY_STOCK_REVERSAL;
+
+    return reverseStockBroughtInByDocument({
+      businessId: params.businessId,
+      sourceId: params.sourceId,
+      sourceType: params.sourceType,
+      reversalDate: params.reversalDate,
+      reference: params.reference,
+      reason: `voided with ${params.reference ?? 'journal reversal'} — ${params.reason}`,
+      createdBy: params.createdBy,
+    });
   }
 
   private async voidSourceRecord(

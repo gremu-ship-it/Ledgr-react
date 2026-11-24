@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { paymentStatusFromAmounts } from '../paymentStatus';
+import { expenseStatusFromAmounts, paymentStatusFromAmounts } from '../paymentStatus';
 
 /**
  * Unit tests for the single source of truth behind invoice payment status.
@@ -51,5 +51,28 @@ describe('paymentStatusFromAmounts', () => {
     // 1000 total, two payments 400+600; reversing either leaves a partial state
     expect(paymentStatusFromAmounts(1000, 600)).toBe('partially_paid');
     expect(paymentStatusFromAmounts(1000, 0)).toBe('sent');
+  });
+});
+
+/**
+ * The expense lifecycle is separate from the invoice one: `expenses_status_check`
+ * allows only draft | approved | paid | void, so an invoice-style
+ * `partially_paid` would raise a constraint violation *after* the payment had
+ * already committed. Part settlement is carried by `amount_paid` instead.
+ */
+describe('expenseStatusFromAmounts', () => {
+  it('leaves an unpaid bill as an outstanding approved payable', () => {
+    expect(expenseStatusFromAmounts(4_000_000, 0)).toBe('approved');
+  });
+
+  it('keeps a part-paid bill on approved (status cannot express a part payment)', () => {
+    expect(expenseStatusFromAmounts(4_000_000, 1_200_000)).toBe('approved');
+    expect(expenseStatusFromAmounts(4_000_000, 3_999_999)).toBe('approved');
+  });
+
+  it('marks a bill paid only when it is settled in full', () => {
+    expect(expenseStatusFromAmounts(4_000_000, 4_000_000)).toBe('paid');
+    // Tolerance matches the cent rounding the RPC applies.
+    expect(expenseStatusFromAmounts(4_000_000, 4_000_000.004)).toBe('paid');
   });
 });

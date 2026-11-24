@@ -127,9 +127,17 @@ export async function refreshDashboardQueries(
   ]);
 }
 
-/** Draft and void expenses must not contribute to dashboard totals or trends. */
+/**
+ * Which expenses contribute to dashboard totals and trends.
+ *
+ * Void expenses never count — the journal entry behind them has been reversed.
+ * Draft expenses DO count: the bill builder used to write every supplier bill
+ * as `draft` even though it posted DR Inventory / CR Trade Creditors straight
+ * away, so excluding drafts dropped genuine spend (and genuine payables) out of
+ * the P&L and cash-flow trends while the ledger still carried them.
+ */
 export function isDashboardExpenseIncluded(status: string | null | undefined): boolean {
-  return status !== 'void' && status !== 'draft';
+  return status !== 'void';
 }
 
 /**

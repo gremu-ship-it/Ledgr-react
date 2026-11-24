@@ -25,6 +25,10 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAssignCenter, setShowAssignCenter] = useState(false);
+  // Reported after a successful reversal: stock unwinding is a best-effort
+  // companion to the ledger reversal, so the user is told what happened rather
+  // than left to discover a quantity mismatch in the warehouse later.
+  const [stockNotice, setStockNotice] = useState<string | null>(null);
   const [assignBranchId, setAssignBranchId] = useState('');
   const [assignDeptId, setAssignDeptId] = useState('');
 
@@ -74,11 +78,32 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
     try {
       const entryNumber = await nextEntryNumber(data.entry.business_id);
       const today = new Date().toISOString().slice(0, 10);
-      await repos.journal.reverse(data.entry.id, entryNumber, today, currentUser.id, reason.trim());
+      const result = await repos.journal.reverse(
+        data.entry.id,
+        entryNumber,
+        today,
+        currentUser.id,
+        reason.trim(),
+      );
 
       queryClient.invalidateQueries({ queryKey: ['journal'] });
       queryClient.invalidateQueries({ queryKey: ['journal_entry_detail', entryId] });
       queryClient.invalidateQueries({ queryKey: ['accounting_periods'] });
+
+      if (result.stockReversal.recorded) {
+        // Stock moved back out: say so while the modal is still on screen, then
+        // close behind the acknowledgement. Also refresh the stock surfaces the
+        // reversal just changed.
+        void queryClient.invalidateQueries({ queryKey: ['inventory_balances'] });
+        void queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation'] });
+        setStockNotice(
+          `Reversed. ${result.stockReversal.quantityReversed.toLocaleString()} unit(s) of stock ` +
+          `(${formatMwkDetailed(result.stockReversal.valueReversed)}) were returned to the warehouse ` +
+          `so inventory matches the reversed entry.`,
+        );
+        return;
+      }
+
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reverse entry.');
@@ -316,7 +341,19 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                 </div>
               )}
 
-              {canActuallyReverse && !showReverseForm && (
+              {stockNotice && (
+                <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50 px-3 py-2">
+                  <p className="text-sm text-brand-700">{stockNotice}</p>
+                  <button
+                    onClick={onClose}
+                    className="mt-2 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+
+              {canActuallyReverse && !showReverseForm && !stockNotice && (
                 <button
                   onClick={() => setShowReverseForm(true)}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
@@ -325,7 +362,7 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                 </button>
               )}
 
-              {canActuallyReverse && showReverseForm && (
+              {canActuallyReverse && showReverseForm && !stockNotice && (
                 <div className="mt-4 rounded-xl border border-gray-200 p-3">
                   <label className="mb-1.5 block text-xs font-semibold text-gray-600">
                     Reason for reversal (required)

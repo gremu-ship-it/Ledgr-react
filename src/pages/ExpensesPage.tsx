@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw, Eye } from 'lucide-react';
+import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw, Eye, CreditCard } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -15,6 +15,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { repos } from '@/lib/repositories';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
+import { RecordBillPaymentModal } from '@/components/expenses/RecordBillPaymentModal';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService';
@@ -379,6 +380,14 @@ interface ExpenseForm {
    *  goods-receipt command, so the legacy per-line purchase hook must not run and
    *  create a second receipt for the same bill. */
   construction_bill: boolean;
+  /** How much of the bill is being paid at the point it is recorded.
+   *
+   *  Previously a bill was ALWAYS saved unpaid and the credit-purchase case had
+   *  no way to express "we paid 1.2M of the 4M today". Leaving it at 0 saves the
+   *  bill as an approved payable; anything above 0 records the supplier payment
+   *  through record_expense_payment, which posts DR Trade Creditors / CR Cash and
+   *  leaves the balance outstanding. */
+  amount_paid_now: string;
   lines:          ExpenseLine[];
 }
 
@@ -868,6 +877,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     contact_id: '', expense_number: '', reference: '', expense_date: today(), due_date: '', notes: '',
     branch_id: '', department_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
     construction_bill: false,
+    amount_paid_now: '0',
     lines: [{ description: '', quantity: '1', unit_price: '', discount_percent: '0', tax_code: 'vat_standard', account_id: '', product_id: '' }],
   });
 
@@ -981,7 +991,11 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           business_id:    businessId,
           expense_number: form.expense_number,
           expense_type:   'bill',
-          status:         'draft',
+          // A bill is a liability from the moment it is recorded: the journal
+          // entry (DR Inventory/expense, CR Trade Creditors) posts immediately.
+          // Saving it as `draft` hid it from the payables summary, so a
+          // MK 4,000,000 supplier bill moved the ledger and showed nowhere.
+          status:         'approved',
           contact_id:     form.contact_id || null,
           expense_date:   form.expense_date,
           due_date:       form.due_date || null,
@@ -1094,9 +1108,58 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           { cause: err },
         );
       }
+
+      // Part payment at the point of recording. Nothing is written when the
+      // bill is unpaid in full — that is the common credit-purchase case, and
+      // the bill simply stays an outstanding payable.
+      const paidNow = parseFloat(form.amount_paid_now) || 0;
+      if (paidNow > 0) {
+        if (paidNow > total + 0.01) {
+          throw new Error(
+            `The amount paid now (${formatMwkDetailed(paidNow)}) cannot exceed the bill total ` +
+            `(${formatMwkDetailed(total)}). The bill is saved; correct the payment from the expense list.`,
+          );
+        }
+        try {
+          await repos.expense.recordPaymentForBill(
+            {
+              business_id:      businessId,
+              expense_id:       created.id,
+              payment_date:     form.expense_date,
+              amount:           paidNow,
+              currency:         originalCurrency,
+              exchange_rate:    rate.rate,
+              original_currency: originalCurrency,
+              original_amount:  paidNow,
+              functional_currency: functionalCurrency,
+              functional_amount: paidNow * rate.rate,
+              rate_date:        rate.rateDate,
+              rate_is_stale:    rate.isStale,
+              payment_method:   'bank_transfer',
+              reference:        form.reference.trim() || null,
+              bank_account_id:  null,
+              notes:            `Paid at bill entry — ${form.expense_number}`,
+              created_by:       null,
+            } as InsertDto<'expense_payments'>,
+          );
+        } catch (err) {
+          log.error('Bill part payment failed', err as Error, { expenseNumber: form.expense_number });
+          throw new Error(
+            `Bill ${form.expense_number} was saved, but recording the payment against it failed: ` +
+            `${(err as Error).message}. Use the Balance column in the expense list to record it.`,
+            { cause: err },
+          );
+        }
+      }
     },
     onSuccess: () => {
-      setAlert({ type: 'success', message: 'Expense created and posted successfully.' });
+      const paidNow = parseFloat(form.amount_paid_now) || 0;
+      setAlert({
+        type: 'success',
+        message: paidNow > 0
+          ? `Bill created. ${formatMwkDetailed(paidNow)} paid, ${formatMwkDetailed(Math.max(0, total - paidNow))} left outstanding.`
+          : `Bill created with ${formatMwkDetailed(total)} outstanding. Record payments from the expense list.`,
+      });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
@@ -1314,6 +1377,31 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             </div>
           </div>
 
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Paid to supplier now (optional)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              max={total}
+              value={form.amount_paid_now}
+              onChange={(e) => setField('amount_paid_now', e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:w-48"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Leave at 0 for a bill on credit — the full amount stays outstanding and shows as a
+              payable. Enter a smaller figure to record a part payment now; DR Trade Creditors /
+              CR Cash is posted for exactly that amount.
+            </p>
+            {(parseFloat(form.amount_paid_now) || 0) > 0 && (
+              <p className="mt-1 text-xs font-medium text-gray-700">
+                {formatMwkDetailed(Math.max(0, total - (parseFloat(form.amount_paid_now) || 0)))} will remain outstanding.
+              </p>
+            )}
+          </div>
+
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Notes (optional)</label>
             <textarea rows={2} value={form.notes} onChange={(e) => setField('notes', e.target.value)}
@@ -1374,6 +1462,18 @@ function useRetryPosting(businessId: string) {
 
 // ── Expense List ──────────────────────────────────────────────────────────────
 
+/**
+ * A bill that still owes money and can therefore take a payment.
+ *
+ * `amount_paid` is the source of truth, not the status: the server command
+ * updates the amount first, so a bill is only offered as payable while a
+ * balance genuinely remains. `void` is excluded because the payment command
+ * refuses it.
+ */
+function outstandingOnBill(expense: Row<'expenses'>): number {
+  if (expense.status === 'void') return 0;
+  return Math.max(0, Number(expense.total_amount) - Number(expense.amount_paid ?? 0));
+}
 
 function ExpenseList({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient();
@@ -1397,6 +1497,9 @@ function ExpenseList({ businessId }: { businessId: string }) {
 
   const retry = useRetryPosting(businessId);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  // The bill currently being paid. recordPayment has always existed
+  // server-side; this is the screen that finally calls it.
+  const [payingBill, setPayingBill] = useState<Row<'expenses'> | null>(null);
 
   // Pull-to-refresh resets the infinite query back to page 1 and re-fetches.
   const onRefresh = useCallback(async () => {
@@ -1433,6 +1536,9 @@ function ExpenseList({ businessId }: { businessId: string }) {
                 key={exp.id}
                 actions={[
                   { label: 'View', icon: Eye, color: 'bg-gray-700', action: () => {} },
+                  ...(outstandingOnBill(exp) > 0.01
+                    ? [{ label: 'Pay', icon: CreditCard, color: 'bg-brand-500', action: () => setPayingBill(exp) }]
+                    : []),
                   { label: needsPosting ? 'Retry' : 'Posted', icon: needsPosting ? RefreshCw : CheckCircle, color: needsPosting ? 'bg-amber-500' : 'bg-brand-500', action: () => { if (needsPosting) { setRetryingId(exp.id); retry.mutate(exp, { onSettled: () => setRetryingId(null) }); } } },
                 ]}
               >
@@ -1446,11 +1552,16 @@ function ExpenseList({ businessId }: { businessId: string }) {
                     <p className="text-xs text-gray-500">{exp.expense_date}</p>
                     <p className="text-sm font-bold text-gray-900">{formatMwkDetailed(exp.total_amount)}</p>
                   </div>
-                  <div className="mt-1">
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {needsPosting ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">Needs Posting</span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-brand-600">Posted</span>
+                    )}
+                    {outstandingOnBill(exp) > 0.01 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                        {formatMwkDetailed(outstandingOnBill(exp))} due
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1470,6 +1581,7 @@ function ExpenseList({ businessId }: { businessId: string }) {
                   <th scope="col" className={`${thClass} text-right`}>Amount</th>
                   <th scope="col" className={`hidden sm:table-cell ${thClass} text-right`}>Paid</th>
                   <th scope="col" className={`hidden sm:table-cell ${thClass} text-center`}>Status</th>
+                  <th scope="col" className={`hidden md:table-cell ${thClass} text-right`}>Balance</th>
                   <th scope="col" className={`${thClass} text-center`}>Posting</th>
                 </tr>
               </thead>
@@ -1484,6 +1596,20 @@ function ExpenseList({ businessId }: { businessId: string }) {
                       <td className={`${tdClass} text-right font-medium`}>{formatMwkDetailed(exp.total_amount)}</td>
                       <td className={`hidden sm:table-cell ${tdClass} text-right text-gray-500`}>{formatMwkDetailed(exp.amount_paid)}</td>
                       <td className={`hidden sm:table-cell ${tdClass} text-center`}><StatusBadge status={exp.status} /></td>
+                      <td className={`hidden md:table-cell ${tdClass} text-right`}>
+                        {outstandingOnBill(exp) > 0.01 ? (
+                          <button
+                            onClick={() => setPayingBill(exp)}
+                            className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                            title={`Record a payment against ${exp.expense_number}`}
+                          >
+                            <CreditCard className="h-3 w-3" />
+                            {formatMwkDetailed(outstandingOnBill(exp))}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className={`${tdClass} text-center`}>
                         {needsPosting ? (
                           <button
@@ -1510,6 +1636,15 @@ function ExpenseList({ businessId }: { businessId: string }) {
             <div className="border-t border-red-100 bg-red-50 px-4 py-2.5 text-xs text-red-700">Retry failed: {(retry.error as Error).message}</div>
           )}
         </div>
+      )}
+
+      {payingBill && (
+        <RecordBillPaymentModal
+          bill={payingBill}
+          businessId={businessId}
+          onClose={() => setPayingBill(null)}
+          onSuccess={() => setPayingBill(null)}
+        />
       )}
 
       {/* ── Infinite scroll sentinel & status ─────────────────────── */}

@@ -143,9 +143,18 @@ function incrementAmountPaid(
   row.amount_paid = Math.round(Math.max(0, paid) * 100) / 100;
   row.amount_due = Math.round((total - Number(row.amount_paid)) * 100) / 100;
 
-  if (Number(row.amount_paid) <= 0) row.status = table === 'invoices' ? 'sent' : 'pending';
-  else if (Number(row.amount_paid) >= total) row.status = 'paid';
-  else row.status = 'partially_paid';
+  // Expenses have their own status vocabulary: `expenses_status_check` allows
+  // only draft | approved | paid | void, so a part-paid bill stays `approved`
+  // with a remaining balance rather than becoming `partially_paid`.
+  if (table === 'expenses') {
+    row.status = Number(row.amount_paid) >= total ? 'paid' : 'approved';
+  } else if (Number(row.amount_paid) <= 0) {
+    row.status = 'sent';
+  } else if (Number(row.amount_paid) >= total) {
+    row.status = 'paid';
+  } else {
+    row.status = 'partially_paid';
+  }
   row.updated_at = new Date().toISOString();
   markDemoStateChanged();
   return ok(row);
