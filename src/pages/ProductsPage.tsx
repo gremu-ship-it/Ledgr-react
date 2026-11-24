@@ -729,9 +729,31 @@ function MovementsTab({ businessId }: { businessId: string }) {
     enabled: Boolean(businessId) && Boolean(selectedProduct),
   });
 
+  // Current per-location balances: the write-off form shows the location's real
+  // average cost so the user can see the value the ledger will release.
+  const { data: balances = [] } = useQuery({
+    queryKey: ['balances', businessId, 'by-location'],
+    queryFn: () => repos.inventory.findAllWithDetails(businessId),
+    enabled: Boolean(businessId),
+  });
+
   function setF(field: keyof MovementForm, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
+
+  // A write-off is valued at the cost the stock actually carries, not at
+  // whatever is typed here — the server enforces that. Surfacing the real
+  // average stops the user believing their figure is what hits 5180: in Nov
+  // 2026 every write-off was priced at a round 5,000 while the stock carried
+  // ~4,000, inventing a variance that reconciliation then pushed to cost of
+  // sales a second time.
+  const isWriteOff = form.movement_type === 'adjustment_out';
+  const locationAvgCost = (() => {
+    const row = balances.find(
+      (b) => b.productid === form.product_id && b.locationid === form.location_id,
+    );
+    return row ? Number(row.average_cost) : 0;
+  })();
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -838,9 +860,17 @@ function MovementsTab({ businessId }: { businessId: string }) {
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Unit Cost (MWK)</label>
             <input type="number" min="0" step="0.01" value={form.unit_cost}
-              onChange={(e) => setF('unit_cost', e.target.value)} placeholder="0.00"
+              onChange={(e) => setF('unit_cost', e.target.value)} placeholder={isWriteOff && locationAvgCost > 0 ? locationAvgCost.toFixed(2) : '0.00'}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-            <p className="mt-1 text-[11px] text-gray-500">Leave blank to add quantity without changing the average cost.</p>
+            {isWriteOff ? (
+              <p className="mt-1 text-[11px] text-gray-500">
+                {locationAvgCost > 0
+                  ? <>Stock at this location is carried at <strong>{formatMwkDetailed(locationAvgCost)}</strong> per unit. A write-off is valued at that average, so the ledger and the stock records give up the same amount — the figure here is only a record of what you entered.</>
+                  : <>No stock balance at this location yet, so the ledger will use the figure you enter.</>}
+              </p>
+            ) : (
+              <p className="mt-1 text-[11px] text-gray-500">Leave blank to add quantity without changing the average cost.</p>
+            )}
           </div>
 
           <div>
