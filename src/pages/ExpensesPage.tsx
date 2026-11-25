@@ -961,6 +961,36 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       if (validLines.length === 0) throw new Error('Add at least one line item');
       if (validLines.some((l) => !l.account_id)) throw new Error('Every line needs an expense category');
 
+      // DUPLICATE GUARD. A bill that repeats an earlier one — same supplier,
+      // same money, same document date, same goods — is how a reversed
+      // purchase silently comes back as a second expense (EXP-0478 reversed,
+      // then EXP-0490 re-entered identically and back-dated to its date).
+      // Warn rather than block: two identical loads in a day is a real
+      // purchase, so the user decides, but it can no longer happen silently.
+      const duplicates = await repos.expense.findPossibleDuplicates(businessId, {
+        contactId: form.contact_id || null,
+        totalAmount: total,
+        expenseDate: form.expense_date,
+        lines: validLines.map((l) => ({
+          productId: l.product_id || null,
+          quantity: parseFloat(l.quantity) || 0,
+          unitPrice: parseFloat(l.unit_price) || 0,
+        })),
+      });
+      if (duplicates.length > 0) {
+        const described = duplicates
+          .map((d) => `${d.expense_number} (${d.status}, ${formatMwkDetailed(Number(d.total_amount))})`)
+          .join(', ');
+        const proceed = window.confirm(
+          `This looks like a bill you already recorded: ${described}.\n\n` +
+          'Same supplier, same total, same date and the same stock lines. ' +
+          'If it is the same purchase, cancel and use the existing bill — or enter the ' +
+          "supplier's invoice number so the two can be told apart.\n\n" +
+          'Record it as a separate purchase anyway?',
+        );
+        if (!proceed) return;
+      }
+
       const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
       const originalCurrency = form.currency || functionalCurrency;
       const manualRate = form.exchange_rate ? parseFloat(form.exchange_rate) : null;
