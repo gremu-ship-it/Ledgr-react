@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, ArrowUpRight, CheckCircle2, CircleAlert, LoaderCircle, LockKeyhole, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react';
 import { Assistant } from '@/components/ai/Assistant';
+import { AiChatConsole } from '@/components/ai/AiChatConsole';
 import { FinancialIntelligence } from '@/components/ai/FinancialIntelligence';
 import { useAppStore } from '@/store/useAppStore';
 import { useUsage } from '@/hooks/useUsage';
@@ -236,6 +237,8 @@ function AnomalyDiagnosticsTab() {
         <SeverityCard title={t('ai.lowSeverity')} value={lowCount} tone="border-sky-200 bg-sky-50 text-sky-900" icon={CircleAlert} />
         <SeverityCard title={t('ai.resolved')} value={resolvedCount} tone="border-emerald-200 bg-emerald-50 text-emerald-900" icon={CheckCircle2} />
       </section>
+
+      <AiChatConsole />
 
       <section>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
