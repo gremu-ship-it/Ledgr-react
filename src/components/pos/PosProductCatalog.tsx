@@ -1,7 +1,9 @@
 import { useState, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Search,
   ScanBarcode,
+  Camera,
   Package,
   Plus,
 } from 'lucide-react';
@@ -14,6 +16,8 @@ interface PosProductCatalogProps {
   categories?: string[];
   isLoading?: boolean;
   onAddToCart: (product: PosProduct) => void;
+  /** Opens the native-camera barcode scanner (phone/tablet tills). */
+  onOpenCameraScanner?: () => void;
 }
 
 export function PosProductCatalog({
@@ -21,7 +25,9 @@ export function PosProductCatalog({
   categories = [],
   isLoading = false,
   onAddToCart,
+  onOpenCameraScanner,
 }: PosProductCatalogProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -83,16 +89,27 @@ export function PosProductCatalog({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className="w-full rounded-2xl border border-gray-200 bg-gray-50/70 pl-10 pr-10 py-3 text-xs font-semibold focus:border-brand-500 focus:bg-white focus:outline-none transition-all shadow-2xs"
+            className="w-full rounded-2xl border border-gray-200 bg-gray-50/70 pl-10 pr-20 py-3 text-xs font-semibold focus:border-brand-500 focus:bg-white focus:outline-none transition-all shadow-2xs"
           />
           <button
             type="button"
             onClick={() => barcodeInputRef.current?.focus()}
             title="Focus Barcode Scanner"
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-1 text-gray-400 hover:text-brand-600 hover:bg-gray-100"
+            className="absolute right-10 top-1/2 -translate-y-1/2 rounded-xl p-1 text-gray-400 hover:text-brand-600 hover:bg-gray-100"
           >
             <ScanBarcode className="h-4 w-4" />
           </button>
+          {onOpenCameraScanner && (
+            <button
+              type="button"
+              onClick={onOpenCameraScanner}
+              title={t('pos.scanBarcode')}
+              aria-label={t('pos.scanBarcode')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-xl p-1 text-gray-400 hover:text-brand-600 hover:bg-gray-100"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Category Pills */}

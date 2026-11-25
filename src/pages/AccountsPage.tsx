@@ -14,13 +14,15 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ChevronRight, ChevronDown, AlertTriangle,
-  CheckCircle, AlertCircle, RefreshCw, Settings2, X,
+  CheckCircle, AlertCircle, RefreshCw, Settings2, X, Upload,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { handleError, getErrorMessage } from '@/lib/errorHandler';
 import { supabase } from '@/lib/supabase';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
+import { CsvImportModal } from '@/components/common/CsvImportModal';
+import { importValidatedRows } from '@/services/nativeCsvImportService';
 import type { Row, InsertDto } from '@/dal/types/database';
 import {
   seedChartOfAccounts,
@@ -441,8 +443,10 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
 export function AccountsPage() {
   const businessId  = useAppStore(s => s.currentBusiness?.business.id);
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const [search,   setSearch]   = useState('');
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [typeFilter, setType]   = useState<AccountType | 'all'>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modal,    setModal]    = useState<{ open: boolean; account?: Account }>({ open: false });
@@ -629,6 +633,13 @@ export function AccountsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <ImportTemplateMenu entityTypes={['chart_of_accounts', 'opening_balances', 'trial_balance']} />
+          <button
+            type="button"
+            onClick={() => setIsCsvImportOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Upload className="mr-1.5 h-4 w-4" />{t('csvImport.uploadButton')}
+          </button>
           <button
             onClick={() => setModal({ open: true })}
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
@@ -885,6 +896,18 @@ export function AccountsPage() {
           onClose={() => setModal({ open: false })}
         />
       )}
+
+      <CsvImportModal
+        isOpen={isCsvImportOpen}
+        onClose={() => setIsCsvImportOpen(false)}
+        entityType="accounts"
+        title={t('csvImport.modalTitle', { entity: t('csvImport.entityAccounts') })}
+        onImport={async (rows) => {
+          if (!businessId) throw new Error('No business selected.');
+          await importValidatedRows(businessId, 'accounts', rows);
+          await queryClient.invalidateQueries({ queryKey: ['accounts', businessId] });
+        }}
+      />
     </div>
   );
 }

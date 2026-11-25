@@ -1,14 +1,17 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Pencil, AlertCircle, CheckCircle,
   X, Search, Building2, Tag, ChevronDown, PlayCircle,
-  ArchiveX, TrendingUp, ListOrdered, Loader2, Landmark,
+  ArchiveX, TrendingUp, ListOrdered, Loader2, Landmark, Upload,
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
+import { CsvImportModal } from '@/components/common/CsvImportModal';
+import { importValidatedRows } from '@/services/nativeCsvImportService';
 import { createLogger } from '@/lib/logger';
 import {
   isAssetDepreciable,
@@ -1732,7 +1735,10 @@ export function AssetsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const userId = useAppStore((s) => s.currentUser?.id);
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<'register' | 'categories'>('register');
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
 
   if (!businessId) {
     return (
@@ -1749,7 +1755,16 @@ export function AssetsPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Fixed Assets</h1>
           <p className="mt-1 text-sm text-gray-500">Manage fixed assets and depreciation for {currentBusiness.business.name}</p>
         </div>
-        <ImportTemplateMenu entityTypes={['fixed_assets']} />
+        <div className="flex flex-wrap gap-2">
+          <ImportTemplateMenu entityTypes={['fixed_assets']} />
+          <button
+            type="button"
+            onClick={() => setIsCsvImportOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Upload className="mr-1.5 h-4 w-4" />{t('csvImport.uploadButton')}
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 flex w-fit gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
@@ -1769,6 +1784,18 @@ export function AssetsPage() {
 
       {tab === 'register' && userId && <AssetRegisterTab businessId={businessId} userId={userId} />}
       {tab === 'categories' && <CategoriesTab businessId={businessId} />}
+
+      <CsvImportModal
+        isOpen={isCsvImportOpen}
+        onClose={() => setIsCsvImportOpen(false)}
+        entityType="fixed_assets"
+        title={t('csvImport.modalTitle', { entity: t('csvImport.entityFixedAssets') })}
+        onImport={async (rows) => {
+          await importValidatedRows(businessId, 'fixed_assets', rows);
+          await queryClient.invalidateQueries({ queryKey: ['assets', businessId] });
+          await queryClient.invalidateQueries({ queryKey: ['asset_categories', businessId] });
+        }}
+      />
     </div>
   );
 }

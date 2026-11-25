@@ -98,6 +98,9 @@ export function PosCart({
   const { t } = useTranslation();
   const [editingPriceItem, setEditingPriceItem] = useState<PosCartItem | null>(null);
   const [linePriceValue, setLinePriceValue] = useState<number>(0);
+  // Keep the raw keystrokes while a cashier types a quantity: clearing the
+  // field to type "12" must not snap it back to 1 after the first backspace.
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   // Modal / Dropdown states
   const [isCustomerSelectorOpen, setIsCustomerSelectorOpen] = useState(false);
   const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
@@ -236,6 +239,26 @@ export function PosCart({
   const handleCheckoutClick = () => {
     if (onProceedToPayment) onProceedToPayment();
     else if (onCheckout) onCheckout();
+  };
+
+  const commitQuantity = (productId: string, rawValue: string) => {
+    const quantity = Math.max(1, parseInt(rawValue, 10) || 1);
+    onUpdateQuantity(productId, quantity);
+    return quantity;
+  };
+
+  const handleQuantityChange = (productId: string, rawValue: string) => {
+    setQuantityDrafts((previous) => ({ ...previous, [productId]: rawValue }));
+    commitQuantity(productId, rawValue);
+  };
+
+  const handleQuantityBlur = (productId: string, rawValue: string) => {
+    commitQuantity(productId, rawValue);
+    setQuantityDrafts((previous) => {
+      const next = { ...previous };
+      delete next[productId];
+      return next;
+    });
   };
 
   return (
@@ -385,17 +408,42 @@ export function PosCart({
                 <div className="flex items-center gap-1.5 bg-white rounded-xl border border-gray-200 p-0.5 shadow-2xs">
                   <button
                     type="button"
-                    onClick={() => onUpdateQuantity(pId, item.quantity - 1)}
+                    aria-label={t('pos.decreaseQuantity')}
+                    onClick={() => {
+                      setQuantityDrafts((previous) => {
+                        const next = { ...previous };
+                        delete next[pId];
+                        return next;
+                      });
+                      if (item.quantity <= 1) onRemoveItem(pId);
+                      else onUpdateQuantity(pId, item.quantity - 1);
+                    }}
                     className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 active:scale-90 transition-transform"
                   >
                     <Minus className="h-3 w-3" />
                   </button>
-                  <span className="w-7 text-center text-xs font-black text-gray-900">
-                    {item.quantity}
-                  </span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    aria-label={`${t('pos.quantity')}: ${item.name}`}
+                    value={quantityDrafts[pId] ?? item.quantity}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => handleQuantityChange(pId, e.target.value)}
+                    onBlur={(e) => handleQuantityBlur(pId, e.target.value)}
+                    className="w-10 rounded-md border border-gray-200 bg-white px-0.5 py-0.5 text-center text-xs font-black text-gray-900 focus:border-brand-500 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
                   <button
                     type="button"
-                    onClick={() => onUpdateQuantity(pId, item.quantity + 1)}
+                    aria-label={t('pos.increaseQuantity')}
+                    onClick={() => {
+                      setQuantityDrafts((previous) => {
+                        const next = { ...previous };
+                        delete next[pId];
+                        return next;
+                      });
+                      onUpdateQuantity(pId, item.quantity + 1);
+                    }}
                     className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 active:scale-90 transition-transform"
                   >
                     <Plus className="h-3 w-3" />

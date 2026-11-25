@@ -57,6 +57,7 @@ import { PosSalesHistoryModal } from '@/components/pos/PosSalesHistoryModal';
 import { PosManagerApprovalModal } from '@/components/pos/PosManagerApprovalModal';
 import { PosOwnerAnalytics } from '@/components/pos/PosOwnerAnalytics';
 import { PosBarcodeLabelGenerator } from '@/components/pos/PosBarcodeLabelGenerator';
+import { CameraBarcodeScannerModal } from '@/components/pos/CameraBarcodeScannerModal';
 import { PosZReportModal } from '@/components/pos/PosZReportModal';
 import { PosHeldOrdersModal, PosHoldOrderModal } from '@/components/pos/PosHeldOrdersModal';
 import { PosSettingsModal } from '@/components/pos/PosSettingsModal';
@@ -167,6 +168,8 @@ export function PosPage() {
   // Owner decision 2026-09-26: server token for an over-cap discount, sent with the sale.
   const [discountOverrideToken, setDiscountOverrideToken] = useState<string | null>(null);
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
+  const [cameraScanError, setCameraScanError] = useState<string | null>(null);
   const [isZReportModalOpen, setIsZReportModalOpen] = useState(false);
   const [approvalActionDescription, setApprovalActionDescription] = useState('');
   const [pendingApprovalCallback, setPendingApprovalCallback] = useState<((approvalToken?: string) => void) | null>(null);
@@ -219,6 +222,26 @@ export function PosPage() {
   const handleAddToCart = useCallback((product: PosProduct) => {
     setCartItems((prev) => addProductToCart(prev, product));
   }, []);
+
+  // Camera scans go through the same catalogue lookup as the keyboard wedge,
+  // so both hardware and phone scanners add the identical product to the cart.
+  const handleCameraScan = useCallback((barcode: string) => {
+    const code = barcode.trim().toLowerCase();
+    const match = products.find((product) =>
+      (product.barcode || '').toLowerCase() === code || (product.sku || '').toLowerCase() === code,
+    );
+    const sellable = match && (
+      match.track_inventory === false || match.stock_unknown === true
+      || (match.stock_quantity ?? match.stockQuantity ?? 0) > 0
+    );
+    if (!match || !sellable) {
+      setCameraScanError(t('pos.cameraScanNotFound', { barcode }));
+      return;
+    }
+    setCameraScanError(null);
+    handleAddToCart(match);
+    setIsCameraScannerOpen(false);
+  }, [products, handleAddToCart, t]);
 
   const handleUpdateQuantity = useCallback((productId: string, quantity: number) => {
     setCartItems((prev) => updateCartItemQuantity(prev, productId, quantity));
@@ -956,12 +979,23 @@ export function PosPage() {
           {/* Left Column: Product Catalog & Barcode Scanner */}
           <div className="flex-1 flex flex-col overflow-hidden border-r border-gray-200 bg-white">
             <PosStockStatusBanner status={stockStatus} onRetry={() => setDataVersion((v) => v + 1)} />
+            {cameraScanError && (
+              <button
+                type="button"
+                role="alert"
+                onClick={() => setCameraScanError(null)}
+                className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-left text-xs font-semibold text-amber-900"
+              >
+                {cameraScanError}
+              </button>
+            )}
             <div className="flex-1 overflow-hidden">
             <PosProductCatalog
               products={products}
               categories={categories}
               isLoading={isLoadingProducts}
               onAddToCart={handleAddToCart}
+              onOpenCameraScanner={() => setIsCameraScannerOpen(true)}
             />
             </div>
           </div>
@@ -1161,6 +1195,12 @@ export function PosPage() {
         open={isBarcodeModalOpen}
         onClose={() => setIsBarcodeModalOpen(false)}
         products={products}
+      />
+
+      <CameraBarcodeScannerModal
+        open={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onScan={handleCameraScan}
       />
 
       <PosZReportModal
