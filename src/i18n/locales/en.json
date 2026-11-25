@@ -1260,6 +1260,60 @@
       "chartDescription": "Projected ending cash position at 30, 60, and 90 days.",
       "assumptions": "Forecasts are estimates, not guarantees. Scheduled receivables are probability-weighted; due payables are treated as committed, and recent cash activity is carried forward as a baseline.",
       "cashHistoryLimited": "Limited cash-flow history is available; the run-rate component is indicative only."
+    },
+    "chat": {
+      "drawerTitle": "Ledgr AI Assistant",
+      "drawerSubtitle": "Real-time ERP intelligence & financial guidance",
+      "inputPlaceholder": "Ask Ledgr AI about finances, BOM costing, construction, POS...",
+      "sendButton": "Send",
+      "clearChat": "Clear Conversation",
+      "suggestionsTitle": "Suggested questions for this page:",
+      "enterpriseRequiredTitle": "Ledgr AI is an Enterprise Feature",
+      "enterpriseRequiredDesc": "Upgrade your plan to Enterprise to unlock interactive AI assistance, real-time margin simulations, and automated financial insights.",
+      "upgradeAction": "Upgrade Plan",
+      "openAssistant": "Open Ledgr AI Assistant",
+      "closeAssistant": "Close Ledgr AI Assistant",
+      "businessBadge": "{{name}} · {{plan}}",
+      "welcome": "Hello! I am your **Ledgr AI Assistant** for **{{business}}**.\n\nI can help with ERP workflows, accounting formulas, navigation, and your live financial data.",
+      "error": "Sorry, I could not answer that just now. Please try again.",
+      "actionOpen": "Open {{label}}",
+      "consoleTitle": "Conversational AI Workspace",
+      "consoleSubtitle": "Ask questions, explore formulas, and jump straight to the right Ledgr screen.",
+      "chips": {
+        "manufacturingLabor": "How to calculate direct labor and BOM overhead?",
+        "manufacturingMarkup": "Explain difference between markup % and gross margin %",
+        "manufacturingScrap": "How do scrap factors affect unit production cost?",
+        "constructionRetention": "How does retention aging work on payment certificates?",
+        "constructionRfi": "What is the difference between RFI and Change Order?",
+        "constructionDelivery": "How to match delivery notes to supplier bills?",
+        "posThermal": "How do I set up 80mm thermal receipt printing?",
+        "posBarcode": "How to scan barcodes using a mobile phone camera?",
+        "posCsv": "How to bulk import products via CSV?",
+        "reportsWorkingCapital": "What is the formula for Working Capital ratio?",
+        "reportsVat": "Explain VAT output tax vs VAT input tax recovery",
+        "reportsJournals": "How are unbalanced journal entries prevented in Ledgr?",
+        "payrollPaye": "How is PAYE tax calculated on salaries?",
+        "payrollReversal": "What happens when a pay run is reversed?",
+        "payrollPayslips": "How to print and export employee payslips?",
+        "generalEquity": "How do I issue shares and record equity capital?",
+        "generalStages": "What are the 11 Construction workflow stages in Ledgr?",
+        "generalOffline": "How does local-first offline desktop sync work?",
+        "generalPnl": "Help me understand my profit and loss report"
+      },
+      "fallback": {
+        "cost": "### Manufacturing Costing & Pricing Formulas\n\n• **Unit Manufacturing Cost (COGM)** = Direct Materials (BOM per 1 unit × Scrap Factor) + Direct Labor Hours + Factory Overhead.\n\n• **Target Gross Margin % Formula**:\n  $$\\text{Selling Price} = \\frac{\\text{Total Unit Cost}}{1 - \\text{Target Margin \\%}}$$\n  *(e.g., Cost MK 100,000 at 35% margin = MK 153,846 selling price)*\n\n• **Cost-Plus Markup % Formula**:\n  $$\\text{Selling Price} = \\text{Total Unit Cost} \\times (1 + \\text{Markup \\%})$$\n  *(e.g., Cost MK 100,000 at 50% markup = MK 150,000 selling price)*",
+        "construction": "### Construction Management in Ledgr ERP\n\nLedgr provides all 11 workflow items in sequence:\n1. Workspace & Procurement · 2. Subcontractors · 3. Payment Certificates\n4. RFIs · 5. Change Orders · 6. Inspection Test Plans (ITPs)\n7. Non-Conformance Reports (NCRs) · 8. HSE Incidents · 9. Toolbox Talks\n10. Project Schedule · 11. Retention Register\n\n*Retention Tip: Gross valuation amounts are recorded per period, with retention withheld (e.g. 5% or 10%) tracked in the Retention Aging register until release after practical completion.*",
+        "pos": "### POS & Retail Operations\n\n• **Thermal Roll Printing**: Supports standard **80mm** desktop counter rolls and **58mm** compact mobile rolls with automatic feed tear-bar clearance.\n• **Camera Barcode Scanner**: Tap the camera icon in POS to scan EAN-13, UPC, Code 128, and QR barcodes directly from your phone's rear camera.\n• **Direct Quantity Entry**: Click any quantity field in the cart to type numbers directly (e.g. 50 units) without clicking '+' repeatedly.\n• **Barcode Label Sheets**: In Products, click *Barcode Labels* to print *N* physical sticker labels for inventory.",
+        "offline": "### Local-First Desktop ERP & License Protection\n\n• **Local Storage**: All business records are stored on your local hard drive via browser IndexedDB for instant, 0ms latency without needing continuous internet.\n• **Subscription Lease**: When online, Ledgr refreshes a cryptographically signed 14-day offline lease token. Anti-clock rollback watermarks prevent tampering.\n• **Desktop App**: Click **Install Desktop App** in the sidebar/profile menu to run Ledgr in a standalone desktop window on Windows, Mac, or Linux.",
+        "general": "Hello! I am your **Ledgr AI Assistant** for **{{business}}**.\n\nI can help you with:\n• **Financial Analysis**: P&L breakdowns, cash flow ratios, tax compliance (VAT/WHT/PAYE).\n• **Operations**: Manufacturing BOM cost rollups, Construction payment certificates, POS & Inventory.\n• **ERP Workflows**: Posting balanced double-entry journals, setting up fixed assets, importing CSV templates.\n\n*Feel free to ask a specific question or choose one of the suggestion chips below.*"
+      },
+      "actions": {
+        "costing": "Open Costing & Pricing Engine",
+        "paymentCertificates": "View Payment Certificates",
+        "pos": "Open POS Terminal",
+        "dashboard": "Return to Dashboard",
+        "insights": "View AI Insights Dashboard"
+      }
     }
   },
   "bankReconciliation": {
