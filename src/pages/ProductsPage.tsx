@@ -1,15 +1,19 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Pencil, AlertCircle, CheckCircle,
-  Package, BarChart3, ArrowUpDown, X, Search,
+  Package, BarChart3, ArrowUpDown, X, Search, Upload, Barcode,
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { getErrorMessage } from '@/lib/errorHandler';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
+import { CsvImportModal } from '@/components/common/CsvImportModal';
+import { BarcodeLabelPrintModal, type BarcodeLabelProduct } from '@/components/inventory/BarcodeLabelPrintModal';
+import { importValidatedRows } from '@/services/nativeCsvImportService';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { weightedAverageCost } from '@/services/inventoryValuation';
 import { newSaveClientKey } from '@/services/quickSaveService';
@@ -375,14 +379,18 @@ function DeleteConfirm({ name, onConfirm, onCancel, isPending }: {
 // ── Products Tab ──────────────────────────────────────────────────────────────
 
 
-function ProductsTab({ businessId, initialSearch }: { businessId: string; initialSearch: string }) {
+function ProductsTab({ businessId, initialSearch, businessName }: {
+  businessId: string; initialSearch: string; businessName?: string;
+}) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const isMobile = useIsMobile();
   const { thClass, tdClass } = useDensity();
   const [search, setSearch] = useState(initialSearch);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Row<'products'> | undefined>();
   const [deleting, setDeleting] = useState<Row<'products'> | undefined>();
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
 
   const onRefresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['products', businessId] });
@@ -424,6 +432,18 @@ function ProductsTab({ businessId, initialSearch }: { businessId: string; initia
     (p.sku ?? '').toLowerCase().includes(search.toLowerCase()),
   );
 
+  const labelProducts = useMemo<BarcodeLabelProduct[]>(
+    () => (products as Row<'products'>[]).map((product) => ({
+      id: product.id,
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode,
+      unit_price: Number(product.sale_price ?? 0),
+      stock_quantity: 1,
+    })),
+    [products],
+  );
+
   return (
     <div ref={containerRef}>
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
@@ -438,12 +458,21 @@ function ProductsTab({ businessId, initialSearch }: { businessId: string; initia
             className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
         </div>
-        <button
-          onClick={() => { setEditing(undefined); setShowModal(true); }}
-          className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 active:scale-95 transition-all shadow-sm"
-        >
-          <Plus className="h-4 w-4" />{isMobile ? 'Add' : 'Add Product'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsLabelModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Barcode className="h-4 w-4" />{t('barcodeLabels.open')}
+          </button>
+          <button
+            onClick={() => { setEditing(undefined); setShowModal(true); }}
+            className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 active:scale-95 transition-all shadow-sm"
+          >
+            <Plus className="h-4 w-4" />{isMobile ? 'Add' : 'Add Product'}
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -556,13 +585,22 @@ function ProductsTab({ businessId, initialSearch }: { businessId: string; initia
           isPending={deleteMutation.isPending}
         />
       )}
+
+      <BarcodeLabelPrintModal
+        open={isLabelModalOpen}
+        onClose={() => setIsLabelModalOpen(false)}
+        products={labelProducts}
+        businessName={businessName}
+      />
     </div>
   );
 }
 
 
 
-function StockTab({ businessId }: { businessId: string }) {
+function StockTab({ businessId, businessName }: { businessId: string; businessName?: string }) {
+  const { t } = useTranslation();
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const { data: products = [] } = useQuery({
     queryKey: ['products', businessId],
     queryFn: async () => {
@@ -606,6 +644,22 @@ function StockTab({ businessId }: { businessId: string }) {
 
   const trackedProducts = (products as Row<'products'>[]).filter((p) => p.track_inventory);
 
+  const labelProducts = useMemo<BarcodeLabelProduct[]>(
+    () => (products as Row<'products'>[])
+      .filter((product) => product.track_inventory)
+      .map((product) => ({
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
+        barcode: product.barcode,
+        unit_price: Number(product.sale_price ?? 0),
+        stock_quantity: balances
+          .filter((balance) => balance.product_id === product.id)
+          .reduce((sum, balance) => sum + Number(balance.quantity_on_hand ?? 0), 0),
+      })),
+    [products, balances],
+  );
+
   function getBalance(productId: string, locationId: string) {
     return balances.find((b) => b.product_id === productId && b.location_id === locationId);
   }
@@ -629,7 +683,17 @@ function StockTab({ businessId }: { businessId: string }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div>
+      <div className="mb-4 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setIsLabelModalOpen(true)}
+          className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <Barcode className="h-4 w-4" />{t('barcodeLabels.open')}
+        </button>
+      </div>
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
           <tr>
@@ -680,7 +744,15 @@ function StockTab({ businessId }: { businessId: string }) {
             );
           })}
         </tbody>
-      </table>
+        </table>
+      </div>
+
+      <BarcodeLabelPrintModal
+        open={isLabelModalOpen}
+        onClose={() => setIsLabelModalOpen(false)}
+        products={labelProducts}
+        businessName={businessName}
+      />
     </div>
   );
 }
@@ -932,8 +1004,11 @@ function MovementsTab({ businessId }: { businessId: string }) {
 export function ProductsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const [searchParams] = useSearchParams();
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const businessId = currentBusiness?.business?.id;
   const [tab, setTab] = useState<Tab>('products');
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const productSearch = searchParams.get('search') ?? '';
   // Construction businesses read this page as "Materials" (see
   // useInventoryPageLabels); everyone else keeps "Products & Inventory".
@@ -956,7 +1031,16 @@ export function ProductsPage() {
           <h1 className="text-2xl font-semibold text-gray-900">{pageLabels.title}</h1>
           <p className="mt-1 text-sm text-gray-500">{pageLabels.subtitle}</p>
         </div>
-        <ImportTemplateMenu entityTypes={['products', 'inventory_opening']} />
+        <div className="flex flex-wrap gap-2">
+          <ImportTemplateMenu entityTypes={['products', 'inventory_opening']} />
+          <button
+            type="button"
+            onClick={() => setIsCsvImportOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Upload className="mr-1.5 h-4 w-4" />{t('csvImport.uploadButton')}
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -981,9 +1065,21 @@ export function ProductsPage() {
         </button>
       </div>
 
-      {tab === 'products' && <ProductsTab key={productSearch} businessId={businessId} initialSearch={productSearch} />}
-      {tab === 'stock' && <StockTab businessId={businessId} />}
+      {tab === 'products' && <ProductsTab key={productSearch} businessId={businessId} initialSearch={productSearch} businessName={currentBusiness?.business?.name} />}
+      {tab === 'stock' && <StockTab businessId={businessId} businessName={currentBusiness?.business?.name} />}
       {tab === 'movements' && <MovementsTab businessId={businessId} />}
+
+      <CsvImportModal
+        isOpen={isCsvImportOpen}
+        onClose={() => setIsCsvImportOpen(false)}
+        entityType="products"
+        title={t('csvImport.modalTitle', { entity: t('csvImport.entityProducts') })}
+        onImport={async (rows) => {
+          await importValidatedRows(businessId, 'products', rows);
+          await queryClient.invalidateQueries({ queryKey: ['products', businessId] });
+          await queryClient.invalidateQueries({ queryKey: ['balances', businessId] });
+        }}
+      />
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Pencil,
-  Users, Building2, Phone, Mail, MapPin, Search,
+  Users, Building2, Phone, Mail, MapPin, Search, Upload,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { ContactModal } from '@/components/contacts/ContactModal';
@@ -10,6 +11,8 @@ import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
+import { CsvImportModal } from '@/components/common/CsvImportModal';
+import { importValidatedRows } from '@/services/nativeCsvImportService';
 import type { Row } from '@/dal/types/database';
 
 
@@ -100,8 +103,10 @@ export function ContactsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const [tab, setTab] = useState<Tab>('customer');
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [showModal, setShowModal] = useState(false);
@@ -177,6 +182,13 @@ export function ContactsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <ImportTemplateMenu entityTypes={['contacts']} />
+          <button
+            type="button"
+            onClick={() => setIsCsvImportOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Upload className="mr-1.5 h-4 w-4" />{t('csvImport.uploadButton')}
+          </button>
           <button
             onClick={() => { setEditing(undefined); setShowModal(true); }}
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
@@ -262,6 +274,17 @@ export function ContactsPage() {
           isPending={deleteMutation.isPending}
         />
       )}
+
+      <CsvImportModal
+        isOpen={isCsvImportOpen}
+        onClose={() => setIsCsvImportOpen(false)}
+        entityType="contacts"
+        title={t('csvImport.modalTitle', { entity: t('csvImport.entityContacts') })}
+        onImport={async (rows) => {
+          await importValidatedRows(businessId, 'contacts', rows);
+          await queryClient.invalidateQueries({ queryKey: ['contacts'] });
+        }}
+      />
     </div>
   );
 }

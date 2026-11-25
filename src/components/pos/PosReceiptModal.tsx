@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Printer,
   CheckCircle2,
@@ -10,6 +11,7 @@ import {
 import type { PosSaleResult, PosSettings, PosSale, PosCartItem, PosPaymentSplit } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { EscPosBuilder, printViaBluetooth } from '@/lib/pos/escpos';
+import { printThermalReceipt, type ReceiptData, type ThermalPaperWidth } from '@/services/thermalReceiptService';
 
 interface PosReceiptModalProps {
   open: boolean;
@@ -26,8 +28,10 @@ export function PosReceiptModal({
   settings,
   onNewSale,
 }: PosReceiptModalProps) {
+  const { t } = useTranslation();
   const receiptRef = useRef<HTMLDivElement>(null);
   const [isEscPosPrinting, setIsEscPosPrinting] = useState(false);
+  const [paperWidth, setPaperWidth] = useState<ThermalPaperWidth>('80mm');
 
   if (!open || !saleResult) return null;
 
@@ -48,6 +52,43 @@ export function PosReceiptModal({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleThermalPrint = () => {
+    const optionalText = (value: unknown) => (value ? String(value) : undefined);
+    const paymentMethodKey = String(payments[0]?.payment_method || 'cash');
+    const receiptData: ReceiptData = {
+      businessName: String(settings?.receipt_header || branchName),
+      taxNumber: optionalText(settings?.receipt_tax_number),
+      address: optionalText(sale.branch_address ?? sale.address),
+      phone: optionalText(settings?.receipt_phone),
+      receiptNumber,
+      date: new Date(createdAt).toLocaleString(),
+      cashierName,
+      customerName: customerName ?? undefined,
+      items: items.map((item) => {
+        const quantity = Number(item.quantity ?? 1);
+        const unitPrice = Number(item.unit_price ?? item.unitPrice ?? 0);
+        return {
+          name: String(item.product_name || item.name || 'Item'),
+          quantity,
+          unitPrice,
+          total: Number(item.line_total ?? item.lineTotal ?? quantity * unitPrice),
+        };
+      }),
+      subtotal: grossAmount,
+      tax: Number(sale.tax_amount ?? sale.taxAmount ?? 0),
+      discount: discountAmount,
+      total: netAmount,
+      paymentMethod: String(
+        t(`pos.paymentMethods.${paymentMethodKey}`, { defaultValue: paymentMethodKey.replace(/_/g, ' ') }),
+      ),
+      amountPaid: totalPaid,
+      change: changeGiven,
+      currency: 'MWK',
+      notes: settings?.receipt_footer || undefined,
+    };
+    printThermalReceipt(receiptData, paperWidth);
   };
 
   const handleDirectEscPosPrint = async () => {
@@ -309,7 +350,29 @@ export function PosReceiptModal({
 
         {/* Action Buttons */}
         <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="thermal-paper-width" className="text-[11px] font-bold uppercase text-gray-500">
+              {t('pos.paperWidth')}
+            </label>
+            <select
+              id="thermal-paper-width"
+              value={paperWidth}
+              onChange={(event) => setPaperWidth(event.target.value as ThermalPaperWidth)}
+              className="rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs font-bold text-gray-800 focus:border-brand-500 focus:outline-none"
+            >
+              <option value="80mm">{t('pos.width80mm')}</option>
+              <option value="58mm">{t('pos.width58mm')}</option>
+            </select>
+          </div>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleThermalPrint}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 hover:bg-brand-100 py-3 text-xs font-bold text-brand-700 shadow-xs active:scale-95 transition-all"
+            >
+              <Printer className="h-4 w-4 text-brand-600" />
+              {t('pos.thermalPrint')}
+            </button>
             <button
               type="button"
               onClick={handlePrint}
