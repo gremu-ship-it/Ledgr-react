@@ -266,6 +266,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         requiresOrgCapability: 'manufacturing',
       },
       {
+        labelKey: 'navigation.items.manufacturingCosting',
+        path: '/manufacturing/costing',
+        icon: Calculator,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
+      {
         labelKey: 'manufacturing.bom.production',
         path: '/manufacturing/production',
         icon: Factory,

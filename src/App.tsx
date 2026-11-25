@@ -125,6 +125,7 @@ const WorkCentresPage = lazyPage(() => import('@/pages/manufacturing/WorkCentres
 const RoutingsPage = lazyPage(() => import('@/pages/manufacturing/RoutingsPage'), 'RoutingsPage');
 const ProductionRunsPage = lazyPage(() => import('@/pages/manufacturing/ProductionRunsPage'), 'ProductionRunsPage');
 const MrpWorkbenchPage = lazyPage(() => import('@/pages/manufacturing/MrpWorkbenchPage'), 'MrpWorkbenchPage');
+const ProductCostingPage = lazyPage(() => import('@/pages/manufacturing/ProductCostingPage'), 'ProductCostingPage');
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const PosRegistersPage = lazyPage(() => import('@/pages/pos/PosRegistersPage'), 'PosRegistersPage');
 const PosShiftsPage = lazyPage(() => import('@/pages/pos/PosShiftsPage'), 'PosShiftsPage');
@@ -765,6 +766,16 @@ function App() {
                       <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
                         <CapabilityGate capability="manufacturing">
                           <MrpWorkbenchPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/costing"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <ProductCostingPage />
                         </CapabilityGate>
                       </PlanGate>
                     }

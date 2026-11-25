@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { PlanGate } from '@/components/billing/PlanGate';
-import { Lock, Pencil, Play, Copy, ArrowLeft } from 'lucide-react';
+import { Lock, Pencil, Play, Copy, ArrowLeft, Calculator } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -243,6 +243,14 @@ function BomDetailPageContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={`/manufacturing/costing?bom=${bom.id}`}
+              className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+              data-testid="analyze-costing-button"
+            >
+              <Calculator className="h-4 w-4" />
+              {t('manufacturing.costing.analyzeFromBom')}
+            </Link>
             {bom.status === 'draft' && !bom.bom_locked_at && (
               <>
                 <Link

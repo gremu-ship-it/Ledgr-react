@@ -137,6 +137,7 @@
       "manufacturingRoutings": "Routings",
       "manufacturingWorkCentres": "Work Centres",
       "manufacturingMrp": "MRP Workbench",
+      "manufacturingCosting": "Costing & Pricing",
       "periods": "Periods",
       "auditLog": "Audit Log",
       "contacts": "Contacts",
@@ -4100,6 +4101,79 @@
       "createWorkOrderAction": "Create Work Order",
       "defineBillOfMaterialsAction": "Define Bill of Materials",
       "viewInventoryStockAction": "View Inventory Stock"
+    },
+    "costing": {
+      "title": "Product Costing & Pricing Engine",
+      "subtitle": "Calculate true unit manufacturing costs and simulate profitable selling prices",
+      "selectProduct": "Select Finished Good",
+      "directMaterials": "Direct Materials (BOM)",
+      "directLabor": "Direct Labor",
+      "overhead": "Manufacturing Overhead",
+      "totalUnitCost": "Total Unit Manufacturing Cost",
+      "pricingSimulator": "Pricing & Margin Simulator",
+      "strategyMargin": "Target Gross Margin (%)",
+      "strategyMarkup": "Cost-Plus Markup (%)",
+      "targetRate": "Target Rate (%)",
+      "recommendedPrice": "Recommended Selling Price",
+      "grossProfitUnit": "Gross Profit per Unit",
+      "currentCatalogPrice": "Current Selling Price",
+      "currentMargin": "Current Margin: {{pct}}%",
+      "lowMarginWarning": "Low Margin (Underpriced)",
+      "healthyMargin": "Healthy Margin",
+      "applyToCatalog": "Apply {{price}} to Product Catalog & POS",
+      "applySuccess": "Product catalog and POS price updated successfully",
+      "exportPdf": "Export Costing Sheet",
+      "scrapFactor": "Scrap / Waste %",
+      "navLabel": "Costing & Pricing",
+      "analyzeFromBom": "Analyze Cost & Pricing",
+      "noProducts": "No finished goods with an active bill of materials yet.",
+      "loadFailed": "Could not load costing data. Try again.",
+      "applyFailed": "Could not update the product price. Try again.",
+      "confirmTitle": "Apply recommended price?",
+      "confirmBody": "Set {{product}} to {{price}} and its unit cost to {{cost}} in the catalog and POS?",
+      "confirmApply": "Apply price",
+      "cancel": "Cancel",
+      "distribution": "Cost distribution",
+      "actualMargin": "Actual margin: {{pct}}%",
+      "priceDifference": "Difference vs current: {{amount}}",
+      "perUnit": "per unit",
+      "materialsTable": {
+        "component": "Component",
+        "quantityPerUnit": "Qty / 1 unit",
+        "unitOfMeasure": "UoM",
+        "unitCost": "Unit cost",
+        "scrap": "Scrap / Waste %",
+        "lineCost": "Line cost"
+      },
+      "laborTable": {
+        "operation": "Operation",
+        "hoursPerUnit": "Hours / unit",
+        "hourlyRate": "Hourly rate",
+        "lineCost": "Line cost",
+        "add": "Add operation",
+        "remove": "Remove"
+      },
+      "overheadTable": {
+        "name": "Overhead",
+        "costType": "Cost type",
+        "rateOrAmount": "Rate / amount",
+        "lineCost": "Line cost",
+        "add": "Add overhead",
+        "remove": "Remove",
+        "fixed": "Fixed per unit",
+        "machine_hours": "Machine hours",
+        "percentage": "% of direct cost"
+      },
+      "defaultOperations": {
+        "cutting": "Cutting",
+        "assembly": "Assembly",
+        "testing": "Testing"
+      },
+      "defaultOverheads": {
+        "power": "Power",
+        "depreciation": "Depreciation",
+        "rent": "Rent allocation"
+      }
     }
   },
   "approvals": {
