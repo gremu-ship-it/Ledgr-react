@@ -5,6 +5,7 @@ import { toRepositoryError } from '../errors/RepositoryError';
 import { fetchAllRows } from '@/lib/paginateQuery';
 import { expenseStatusFromAmounts } from '@/lib/paymentStatus';
 import { createLogger } from '@/lib/logger';
+import { roundMoney } from '@/services/inventoryValuation';
 
 const log = createLogger('ExpenseRepository');
 
@@ -43,6 +44,57 @@ const UNSETTLED_EXPENSE_STATUSES = ['void', 'rejected', 'cancelled'] as const;
 export interface ExpenseWithLines {
   expense: Row<'expenses'>;
   lines: Row<'expense_lines'>[];
+}
+
+/** A previously recorded bill that appears to describe the same purchase. */
+export interface PossibleDuplicateExpense {
+  id: string;
+  expense_number: string;
+  expense_date: string;
+  total_amount: number;
+  status: string;
+  contact_id: string | null;
+}
+
+/**
+ * Two stock lines describe the same goods when the product and the unit cost
+ * agree and only the ordering differs. Quantities are compared after summing
+ * per product, so one line of 1,100 matches two lines of 550 and 550 — that is
+ * the same purchase described two ways, which is exactly what needs catching.
+ *
+ * Rounding is applied per product so `3636.3636` and `3636.36` on the same
+ * line are not treated as a different purchase.
+ */
+function normaliseStockLines(
+  lines: { productId: string | null; quantity: number; unitPrice: number }[],
+): { productId: string; quantity: number; unitPrice: number }[] {
+  const byProduct = new Map<string, { quantity: number; unitPrice: number }>();
+  for (const line of lines) {
+    if (!line.productId) continue;
+    const quantity = Math.abs(Number(line.quantity) || 0);
+    if (quantity === 0) continue;
+    const existing = byProduct.get(line.productId);
+    byProduct.set(line.productId, {
+      quantity: roundMoney((existing?.quantity ?? 0) + quantity),
+      // Keep the first unit cost seen; a summed quantity cannot be priced
+      // meaningfully once lines disagree, and that case already fails below.
+      unitPrice: existing?.unitPrice ?? roundMoney(Number(line.unitPrice) || 0),
+    });
+  }
+  return Array.from(byProduct.entries())
+    .map(([productId, value]) => ({ productId, ...value }))
+    .sort((a, b) => a.productId.localeCompare(b.productId));
+}
+
+function sameStockLines(
+  a: { productId: string; quantity: number; unitPrice: number }[],
+  b: { productId: string; quantity: number; unitPrice: number }[],
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((line, index) =>
+    line.productId === b[index].productId
+    && Math.abs(line.quantity - b[index].quantity) < 0.005
+    && Math.abs(line.unitPrice - b[index].unitPrice) < 0.01);
 }
 
 export interface ExpenseListPage {
@@ -360,6 +412,89 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
       .maybeSingle();
     if (error) throw toRepositoryError('expenses', error);
     return (data as Row<'expenses'> | null) ?? null;
+  }
+
+  /**
+   * Finds a previously recorded bill that describes the same purchase as the
+   * one about to be saved.
+   *
+   * Why this exists: re-entering a bill is how a reversed purchase comes back
+   * as a second expense. EXP-0478 was reversed and EXP-0490 was then entered
+   * with the *same* supplier, quantity, unit cost, branch and document date —
+   * a deliberate back-date — and nothing stopped it. The duplicate cost
+   * 4,000,000 of inventory and left a phantom 1,500,000 creditor behind.
+   *
+   * The construction matcher already refuses a bill that has moved stock, but
+   * that only applies to construction bills. Every other bill was unguarded:
+   * `expenses.reference` (the supplier's own invoice number) is nullable, and
+   * both of these bills had it empty, so reference matching had nothing to
+   * work with.
+   *
+   * So this matches on content the user cannot easily avoid supplying — the
+   * supplier, the total, the expense date and the stock lines — and returns
+   * every bill it finds. It is a *warning*, not a constraint: two identical
+   * loads on the same day from the same supplier is a legitimate purchase, and
+   * blocking it outright would be worse than letting the user confirm it.
+   *
+   * Reversed and voided bills are included on purpose. Re-recreating a bill
+   * that someone deliberately reversed is the exact case that needs flagging.
+   */
+  async findPossibleDuplicates(
+    businessId: string,
+    candidate: {
+      contactId: string | null;
+      totalAmount: number;
+      expenseDate: string;
+      lines: { productId: string | null; quantity: number; unitPrice: number }[];
+    },
+  ): Promise<PossibleDuplicateExpense[]> {
+    // A blank supplier or a blank date means the caller cannot describe the
+    // purchase precisely enough to judge, and a wildcard match would flag
+    // every other unsupplied bill. Nothing to compare.
+    if (!candidate.expenseDate) return [];
+
+    let query = this.client
+      .from('expenses')
+      .select('id, expense_number, expense_date, total_amount, status, contact_id')
+      .eq('business_id', businessId)
+      .is('deleted_at', null)
+      .eq('expense_date', candidate.expenseDate)
+      // Money is numeric(15,2); compare at the same precision so float dust
+      // does not hide a genuine match.
+      .eq('total_amount', roundMoney(candidate.totalAmount));
+
+    query = candidate.contactId
+      ? query.eq('contact_id', candidate.contactId)
+      : query.is('contact_id', null);
+
+    const { data, error } = await query.limit(10);
+    if (error) throw toRepositoryError('expenses', error);
+    const rows = (data as PossibleDuplicateExpense[]) ?? [];
+    if (rows.length === 0) return [];
+
+    // Confirm the stock actually matches. Same total with different goods is
+    // two different purchases, and warning about it would train the user to
+    // click through the dialog without reading it.
+    const wanted = normaliseStockLines(candidate.lines);
+    if (wanted.length === 0) return rows;
+
+    const { data: lineRows, error: lineError } = await this.client
+      .from('expense_lines')
+      .select('expense_id, product_id, quantity, unit_price')
+      .eq('business_id', businessId)
+      .in('expense_id', rows.map((r) => r.id));
+    if (lineError) throw toRepositoryError('expense_lines', lineError);
+
+    const byExpense = new Map<string, { productId: string | null; quantity: number; unitPrice: number }[]>();
+    for (const line of (lineRows ?? []) as {
+      expense_id: string; product_id: string | null; quantity: number; unit_price: number;
+    }[]) {
+      const bucket = byExpense.get(line.expense_id) ?? [];
+      bucket.push({ productId: line.product_id, quantity: line.quantity, unitPrice: line.unit_price });
+      byExpense.set(line.expense_id, bucket);
+    }
+
+    return rows.filter((row) => sameStockLines(wanted, normaliseStockLines(byExpense.get(row.id) ?? [])));
   }
 
   /**
