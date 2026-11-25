@@ -49,6 +49,7 @@ describe('manufacturing work order navigation', () => {
       '/manufacturing',
       '/manufacturing/bom',
       '/manufacturing/mrp',
+      '/manufacturing/costing',
       '/manufacturing/production',
       '/manufacturing/runs',
       '/manufacturing/routings',
