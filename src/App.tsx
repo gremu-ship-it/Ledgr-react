@@ -28,6 +28,7 @@ import { BalanceSheetUpgradePrompt } from '@/components/reports/BalanceSheetUpgr
 import { CashFlowUpgradePrompt } from '@/components/reports/CashFlowUpgradePrompt';
 import { TaxReportUpgradePrompt } from '@/components/reports/TaxReportUpgradePrompt';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
+import { HealthcareVerticalGate } from '@/components/billing/HealthcareVerticalGate';
 import {
   isChunkLoadError,
   attemptChunkRecovery,
@@ -102,6 +103,35 @@ const HseIncidentDetailPage = lazyPage(() => import('@/pages/construction/HseInc
 const ToolboxTalkListPage = lazyPage(() => import('@/pages/construction/ToolboxTalkListPage'), 'ToolboxTalkListPage');
 const ToolboxTalkNewPage = lazyPage(() => import('@/pages/construction/ToolboxTalkNewPage'), 'ToolboxTalkNewPage');
 const SchedulePage = lazyPage(() => import('@/pages/construction/SchedulePage'), 'SchedulePage');
+const HealthcareWorkspacePage = lazyPage(
+  () => import('@/pages/healthcare/HealthcareWorkspacePage'),
+  'HealthcareWorkspacePage',
+);
+const PatientsPage = lazyPage(() => import('@/pages/healthcare/PatientsPage'), 'PatientsPage');
+const ConsultationRoomPage = lazyPage(
+  () => import('@/pages/healthcare/ConsultationRoomPage'),
+  'ConsultationRoomPage',
+);
+const HealthcareBillingPage = lazyPage(
+  () => import('@/pages/healthcare/BillingPage'),
+  'BillingPage',
+);
+const PharmacyStation = lazyPage(
+  () => import('@/pages/healthcare/PharmacyStation'),
+  'PharmacyStation',
+);
+const LabStation = lazyPage(
+  () => import('@/pages/healthcare/LabStation'),
+  'LabStation',
+);
+const InsuranceStation = lazyPage(
+  () => import('@/pages/healthcare/InsuranceStation'),
+  'InsuranceStation',
+);
+const DoctorCommissionsStation = lazyPage(
+  () => import('@/pages/healthcare/DoctorCommissionsStation'),
+  'DoctorCommissionsStation',
+);
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -707,6 +737,81 @@ function App() {
                           <ConstructionWorkspacePage />
                         </CapabilityGate>
                       </PlanGate>
+                    }
+                  />
+                  {/* Healthcare & Clinic is an Enterprise vertical. Every route is
+                      redirect-gated on the HEALTHCARE operating model, so a
+                      business without it never renders a clinic surface. */}
+                  <Route
+                    path="/healthcare"
+                    element={
+                      <HealthcareVerticalGate>
+                        <HealthcareWorkspacePage />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/patients"
+                    element={
+                      <HealthcareVerticalGate>
+                        <PatientsPage />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/consultation"
+                    element={
+                      <HealthcareVerticalGate>
+                        <ConsultationRoomPage />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/billing"
+                    element={
+                      <HealthcareVerticalGate>
+                        <HealthcareBillingPage />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/pharmacy"
+                    element={
+                      <HealthcareVerticalGate>
+                        <PharmacyStation />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/lab"
+                    element={
+                      <HealthcareVerticalGate>
+                        <LabStation />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/insurance"
+                    element={
+                      <HealthcareVerticalGate>
+                        <InsuranceStation />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/doctor-fees"
+                    element={
+                      <HealthcareVerticalGate>
+                        <DoctorCommissionsStation />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/*"
+                    element={
+                      <HealthcareVerticalGate>
+                        <Navigate to="/healthcare" replace />
+                      </HealthcareVerticalGate>
                     }
                   />
                   {/* Every Manufacturing URL is Enterprise-only, business-capability gated, and role checked. */}

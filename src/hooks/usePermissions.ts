@@ -480,7 +480,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       // though they keep the Supply Chain children they already had.
       // BOM routes (/manufacturing/bom, /manufacturing/production, etc.) share
       // the same authority as the workspace itself.
-      if (path.startsWith('/manufacturing') || path.startsWith('/construction')) return true;
+      if (path.startsWith('/manufacturing') || path.startsWith('/construction') || path.startsWith('/healthcare')) return true;
       return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
