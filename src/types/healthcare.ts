@@ -354,6 +354,10 @@ export interface InsuranceProvider {
   billing_address?: string | null;
   default_copay_percent: number;
   credit_period_days: number;
+  /** Maximum accommodation rate the payer covers per bed-night (null = no cap). */
+  bed_daily_cap?: number | null;
+  /** Charge room-upgrade differentials above the cap to the patient. */
+  room_upgrade_charge_to_patient?: boolean;
   receivable_account_id?: string | null;
   settlement_account_id?: string | null;
   write_off_account_id?: string | null;
@@ -371,6 +375,8 @@ export interface InsuranceProviderInput {
   billing_address?: string | null;
   default_copay_percent: number;
   credit_period_days: number;
+  bed_daily_cap?: number | null;
+  room_upgrade_charge_to_patient?: boolean;
   receivable_account_id?: string | null;
   settlement_account_id?: string | null;
   write_off_account_id?: string | null;
@@ -391,6 +397,7 @@ export type ClaimServiceCategory =
   | 'medication'
   | 'laboratory'
   | 'procedure'
+  | 'accommodation'
   | 'other';
 
 export interface InsuranceClaim {
@@ -571,5 +578,176 @@ export interface DoctorPayoutVoucherData {
     earnedCommission: number;
     status: DoctorEarningStatus;
   }>;
+  total: number;
+}
+
+// ── Phase 4: hospital wards, beds and inpatient ADT ────────────────────────
+
+export type WardType =
+  | 'general'
+  | 'semi_private'
+  | 'private'
+  | 'vip'
+  | 'icu'
+  | 'high_dependency'
+  | 'isolation'
+  | 'maternity'
+  | 'pediatric'
+  | 'surgical'
+  | 'emergency_observation';
+
+export type BedStatus = 'available' | 'occupied' | 'cleaning' | 'maintenance' | 'reserved';
+export type AdmissionStatus = 'admitted' | 'discharged' | 'transferred' | 'cancelled';
+export type DischargeCondition =
+  | 'recovered'
+  | 'improved'
+  | 'stable'
+  | 'referred'
+  | 'discharged_against_medical_advice'
+  | 'deceased';
+export type CareLogType =
+  | 'doctor_round'
+  | 'nurse_note'
+  | 'dietary'
+  | 'physiotherapy'
+  | 'incident';
+export type GenderRestriction = 'male_only' | 'female_only' | 'mixed' | 'pediatric';
+
+export interface HospitalWard {
+  id: string;
+  business_id: string;
+  name: string;
+  ward_type: WardType;
+  floor_number?: string | null;
+  gender_restriction: GenderRestriction;
+  total_capacity: number;
+  is_active: boolean;
+  beds?: HospitalBed[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HospitalBed {
+  id: string;
+  business_id: string;
+  ward_id: string;
+  bed_number: string;
+  daily_rate: number;
+  hourly_rate: number;
+  status: BedStatus;
+  current_admission_id?: string | null;
+  amenities?: string[] | null;
+  ward?: HospitalWard | null;
+  current_admission?: PatientAdmission | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PatientAdmissionPatient {
+  id?: string;
+  mrn: string;
+  first_name: string;
+  last_name: string;
+  gender: string;
+  date_of_birth: string;
+  blood_group?: string | null;
+  allergies?: string[] | null;
+  billing_type?: string | null;
+  phone?: string | null;
+}
+
+export interface PatientAdmission {
+  id: string;
+  business_id: string;
+  visit_id: string;
+  patient_id: string;
+  admission_number: string;
+  admitting_doctor_id: string;
+  attending_doctor_id: string;
+  admission_reason: string;
+  admitted_at: string;
+  expected_discharge_date?: string | null;
+  discharged_at?: string | null;
+  discharge_summary?: string | null;
+  discharge_condition?: DischargeCondition | null;
+  status: AdmissionStatus;
+  patient?: PatientAdmissionPatient | null;
+  attending_doctor_name?: string | null;
+  current_bed?: HospitalBed | null;
+  allocations?: BedAllocation[];
+  care_logs?: InpatientCareLog[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BedAllocation {
+  id: string;
+  business_id: string;
+  admission_id: string;
+  bed_id: string;
+  assigned_at: string;
+  released_at?: string | null;
+  daily_rate_applied: number;
+  billing_mode: 'daily' | 'hourly';
+  transfer_reason?: string | null;
+  bed?: HospitalBed | null;
+  created_at: string;
+}
+
+export interface InpatientCareLog {
+  id: string;
+  business_id: string;
+  admission_id: string;
+  recorded_by: string;
+  log_type: CareLogType;
+  note: string;
+  recorded_at: string;
+  recorder_name?: string | null;
+}
+
+/** One accommodation line for a single bed stay (a transfer creates two). */
+export interface InpatientStayCharge {
+  bedId?: string;
+  bedNumber: string;
+  wardName: string;
+  wardType?: WardType | null;
+  assignedAt: string;
+  releasedAt: string;
+  nights: number;
+  dailyRate: number;
+  totalCharge: number;
+}
+
+/** Payer accommodation policy used by the pure split helpers. */
+export interface AccommodationCoveragePolicy {
+  dailyCap?: number | null;
+  copayPercent?: number;
+  roomUpgradeChargeToPatient?: boolean;
+}
+
+export interface AccommodationCoverageLine extends InpatientStayCharge {
+  coveredDailyRate: number;
+  coveredAmount: number;
+  upgradeDifferential: number;
+  patientCopay: number;
+  patientShare: number;
+  insurerShare: number;
+}
+
+export interface AccommodationCoverageResult {
+  lines: AccommodationCoverageLine[];
+  totalCharge: number;
+  patientShare: number;
+  insurerShare: number;
+  upgradeDifferential: number;
+}
+
+/** A ready-to-post bill line for the inpatient bed stay. */
+export interface InpatientAccommodationBillItem {
+  description: string;
+  wardName: string;
+  bedNumber: string;
+  nights: number;
+  dailyRate: number;
   total: number;
 }

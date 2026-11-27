@@ -285,6 +285,60 @@ describe('patient bill calculation', () => {
     expect(bill.total).toBe(29_000);
   });
 
+  it('adds one accommodation line per ward when the visit has an inpatient stay', async () => {
+    hc.handlers.set('patient_visits', () => ({ data: visitRow(), error: null }));
+    hc.handlers.set('lab_orders', () => ({ data: [], error: null }));
+    hc.handlers.set('prescriptions', () => ({ data: [], error: null }));
+    hc.handlers.set('patient_admissions', () => ({
+      data: {
+        id: 'adm-1',
+        business_id: BUSINESS_ID,
+        visit_id: VISIT_ID,
+        patient_id: PATIENT_ID,
+        admission_number: 'ADM-2026-0007',
+        status: 'discharged',
+        admitted_at: '2026-01-01T08:00:00.000Z',
+        discharged_at: '2026-01-05T08:00:00.000Z',
+      },
+      error: null,
+    }));
+    hc.handlers.set('bed_allocations', () => ({
+      data: [
+        {
+          assigned_at: '2026-01-01T08:00:00.000Z',
+          released_at: '2026-01-03T08:00:00.000Z',
+          daily_rate_applied: '50000.00',
+          bed: { bed_number: 'Bed 1', ward: { name: 'General Ward A', ward_type: 'general' } },
+        },
+        {
+          assigned_at: '2026-01-03T08:00:00.000Z',
+          released_at: '2026-01-05T08:00:00.000Z',
+          daily_rate_applied: 80_000,
+          bed: { bed_number: 'Bed 9', ward: { name: 'Private Wing', ward_type: 'private' } },
+        },
+      ],
+      error: null,
+    }));
+
+    const bill = await getPatientVisitBill(VISIT_ID);
+    const accommodation = bill.items.filter((item) => item.category === 'accommodation');
+
+    expect(accommodation).toHaveLength(2);
+    expect(accommodation[0]).toMatchObject({
+      quantity: 2,
+      unitPrice: 50_000,
+      total: 100_000,
+    });
+    expect(accommodation[1]).toMatchObject({
+      quantity: 2,
+      unitPrice: 80_000,
+      total: 160_000,
+    });
+    expect(accommodation[1].description).toContain('Private Wing');
+    expect(bill.subtotal).toBe(15_000 + 260_000);
+    expect(bill.total).toBe(275_000);
+  });
+
   it('builds bill lines from raw clinical rows and rounds money to cents', () => {
     const items = buildBillItems({
       consultationFee: 15_000,

@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { calculateAccommodationCoverage } from '@/lib/healthcare/accommodation';
 import type {
   ClaimServiceCategory,
   ClaimStatus,
@@ -69,6 +70,11 @@ export function normalizeInsuranceProvider(row: Partial<InsuranceProvider>): Ins
     billing_address: row.billing_address ?? null,
     default_copay_percent: toNumber(row.default_copay_percent),
     credit_period_days: toNumber(row.credit_period_days, 30),
+    bed_daily_cap:
+      row.bed_daily_cap === null || row.bed_daily_cap === undefined
+        ? null
+        : toMoney(row.bed_daily_cap),
+    room_upgrade_charge_to_patient: row.room_upgrade_charge_to_patient !== false,
     receivable_account_id: row.receivable_account_id ?? null,
     settlement_account_id: row.settlement_account_id ?? null,
     write_off_account_id: row.write_off_account_id ?? null,
@@ -76,6 +82,13 @@ export function normalizeInsuranceProvider(row: Partial<InsuranceProvider>): Ins
     created_at: String(row.created_at ?? ''),
     updated_at: String(row.updated_at ?? ''),
   };
+}
+
+export interface SplitBillOptions {
+  /** HMO maximum covered accommodation rate per bed-night. */
+  accommodationDailyCap?: number | null;
+  /** Charge room-upgrade differentials above the cap to the patient. */
+  roomUpgradeChargeToPatient?: boolean;
 }
 
 /**
@@ -86,15 +99,24 @@ export function normalizeInsuranceProvider(row: Partial<InsuranceProvider>): Ins
  * patient total exactly as entered; callers that also render line shares should
  * pass the result through `applyCopayCap`, which redistributes the cap across
  * the lines without changing the gross amounts.
+ *
+ * Accommodation lines pass their bed-nights and nightly rate so the payer's
+ * bed cap can apply before the co-pay; any room-upgrade differential is added
+ * to the patient share when the payer policy says so.
  */
 export function calculateSplitBill(
   items: Array<{
     category: ClaimServiceCategory;
     description: string;
     amount: number;
+    /** Bed-nights for accommodation lines; ignored for other categories. */
+    quantity?: number;
+    /** Nightly rate for accommodation lines; ignored for other categories. */
+    unitPrice?: number;
   }>,
   copayPercent: number,
   copayCap?: number,
+  options: SplitBillOptions = {},
 ): SplitBillBreakdown {
   const safeCopayRate = clampPercent(copayPercent) / 100;
 
@@ -104,7 +126,40 @@ export function calculateSplitBill(
   const calculatedItems = items.map((item) => {
     const amount = toMoney(item.amount);
     totalGross += amount;
-    const patientShare = toMoney(amount * safeCopayRate);
+
+    let patientShare: number;
+    if (item.category === 'accommodation') {
+      const quantity =
+        typeof item.quantity === 'number' && Number.isFinite(item.quantity)
+          ? Math.max(1, Math.ceil(item.quantity))
+          : 1;
+      const dailyRate =
+        typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice)
+          ? item.unitPrice
+          : amount / quantity;
+      const coverage = calculateAccommodationCoverage(
+        [
+          {
+            bedNumber: '',
+            wardName: '',
+            assignedAt: '',
+            releasedAt: '',
+            nights: quantity,
+            dailyRate,
+            totalCharge: amount,
+          },
+        ],
+        {
+          dailyCap: options.accommodationDailyCap ?? null,
+          copayPercent,
+          roomUpgradeChargeToPatient: options.roomUpgradeChargeToPatient !== false,
+        },
+      );
+      patientShare = coverage.patientShare;
+    } else {
+      patientShare = toMoney(amount * safeCopayRate);
+    }
+
     const insurerShare = toMoney(amount - patientShare);
     rawPatientTotal += patientShare;
     return {
@@ -263,6 +318,12 @@ export async function createInsuranceProvider(
       ...payload,
       default_copay_percent: clampPercent(toNumber(payload.default_copay_percent)),
       credit_period_days: Math.max(0, Math.trunc(toNumber(payload.credit_period_days, 30))),
+      bed_daily_cap:
+        payload.bed_daily_cap === null || payload.bed_daily_cap === undefined
+          ? null
+          : Math.max(0, toMoney(payload.bed_daily_cap)),
+      room_upgrade_charge_to_patient:
+        payload.room_upgrade_charge_to_patient !== false,
     })
     .select()
     .single();
@@ -288,6 +349,13 @@ export async function updateInsuranceProvider(
       0,
       Math.trunc(toNumber(patch.credit_period_days, 30)),
     );
+  }
+  if (patch.bed_daily_cap !== undefined) {
+    payload.bed_daily_cap =
+      patch.bed_daily_cap === null ? null : Math.max(0, toMoney(patch.bed_daily_cap));
+  }
+  if (patch.room_upgrade_charge_to_patient !== undefined) {
+    payload.room_upgrade_charge_to_patient = patch.room_upgrade_charge_to_patient;
   }
 
   const { data, error } = await db
