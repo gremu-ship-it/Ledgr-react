@@ -8,6 +8,7 @@ const CATEGORY_KEYS: Record<ClaimServiceCategory, string> = {
   medication: 'healthcare.insurance.categories.medication',
   laboratory: 'healthcare.insurance.categories.laboratory',
   procedure: 'healthcare.insurance.categories.procedure',
+  accommodation: 'healthcare.insurance.categories.accommodation',
   other: 'healthcare.insurance.categories.other',
 };
 

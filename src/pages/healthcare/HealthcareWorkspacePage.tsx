@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
+  BedDouble,
   ClipboardList,
   Clock3,
   Plus,
@@ -11,6 +12,7 @@ import {
   RefreshCw,
   Stethoscope,
   UserPlus,
+  UsersRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import {
@@ -232,6 +234,14 @@ export function HealthcareWorkspacePage() {
           <Button variant="secondary" size="sm" onClick={() => openBilling(selectedVisit?.id)}>
             <Receipt className="h-3.5 w-3.5" aria-hidden />
             {t('healthcare.workspace.viewBilling')}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate('/healthcare/wards')}>
+            <BedDouble className="h-3.5 w-3.5" aria-hidden />
+            {t('healthcare.wards.title')}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate('/healthcare/admissions')}>
+            <UsersRound className="h-3.5 w-3.5" aria-hidden />
+            {t('healthcare.inpatient.title')}
           </Button>
           {!selectedVisit && (
             <span className="self-center text-[11px] text-gray-400">

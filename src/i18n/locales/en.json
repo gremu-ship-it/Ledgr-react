@@ -209,7 +209,9 @@
       "pharmacy": "Pharmacy",
       "lab": "Laboratory",
       "insurance": "Insurance & Claims",
-      "doctorFees": "Doctor Commissions"
+      "doctorFees": "Doctor Commissions",
+      "wardsAndBeds": "Wards & Beds",
+      "inpatientRegistry": "Inpatient Registry"
     },
     "sections": {
       "clinicalOperations": "Clinical Operations",
@@ -260,7 +262,9 @@
     "commandPlaceholderClinic": "Search patients, clinic pages, or actions… (⌘P)",
     "commandEmpty": "No results for “{{query}}”",
     "commandEmptyHint": "Try a product name, SKU, Income, Invoice, or Payroll.",
-    "commandEmptyHintClinic": "Try a patient name, claim number, billing, or pharmacy."
+    "commandEmptyHintClinic": "Try a patient name, claim number, billing, or pharmacy.",
+    "wardsAndBeds": "Wards & Beds",
+    "inpatientRegistry": "Inpatient Registry"
   },
   "pages": {
     "inventory": {
@@ -5858,7 +5862,9 @@
       "invoiceError": "Could not create the invoice.",
       "invoiceCreated": "Draft invoice {{number}} created.",
       "invoiceCreatedBody": "{{amount}} is now waiting in Ledgr Invoicing.",
-      "readOnly": "Only owners, admins and accountants can post invoices."
+      "readOnly": "Only owners, admins and accountants can post invoices.",
+      "categoryAccommodation": "Bed Stay",
+      "bedCapNotice": "Payer accommodation cap: {{amount}} per bed-night. Room-upgrade differentials follow the payer policy."
     },
     "common": {
       "close": "Close",
@@ -6233,7 +6239,8 @@
         "medication": "Medication",
         "laboratory": "Laboratory",
         "procedure": "Procedure",
-        "other": "Other"
+        "other": "Other",
+        "accommodation": "Accommodation"
       },
       "metrics": {
         "open": "Open claims",
@@ -6269,7 +6276,12 @@
         "empty": "No insurance providers yet",
         "emptyHint": "Add the first HMO or corporate payer to start split billing.",
         "saveError": "Could not save the insurance provider.",
-        "toggleError": "Could not update the provider status."
+        "toggleError": "Could not update the provider status.",
+        "bedDailyCap": "Bed-night cap",
+        "bedDailyCapHint": "Maximum nightly accommodation rate this payer covers. Leave blank for no cap.",
+        "bedDailyCapPlaceholder": "No cap",
+        "bedCapInvalid": "Enter a valid bed-night cap (zero or more).",
+        "roomUpgradeCharge": "Charge room-upgrade differentials to the patient"
       },
       "split": {
         "title": "Split billing",
@@ -6412,6 +6424,238 @@
         "markPaid": "Mark as paid"
       },
       "noBusiness": "Select a business to manage doctor commissions."
+    },
+    "wards": {
+      "title": "Wards & Beds",
+      "subtitle": "Live bed board, admissions, transfers and housekeeping across every ward.",
+      "openRegistry": "Inpatient registry",
+      "configureWards": "Configure Wards & Beds",
+      "refresh": "Refresh",
+      "admitPatient": "Admit patient",
+      "loading": "Loading wards and beds...",
+      "loadError": "Could not load the ward board.",
+      "emptyTitle": "No wards configured yet",
+      "emptyHint": "Create a ward, its beds and the nightly rate to start admitting inpatients.",
+      "noBeds": "This ward has no beds yet.",
+      "noBedsForFilter": "No beds with status {{status}} in this ward.",
+      "noPatient": "No patient in this bed",
+      "ratePerNight": "{{amount}} / night",
+      "floorValue": "Floor {{floor}}",
+      "bedCountValue": "{{count}} beds",
+      "availableCount": "{{count}} free",
+      "occupiedCount": "{{count}} occupied",
+      "occupancyValue": "{{rate}}% occupied",
+      "outOfService": "{{count}} bed(s) reserved or out of service.",
+      "openBill": "Open bill",
+      "dischargedNotice": "{{name}} ({{admission}}) was discharged. Accommodation charges are ready on the bill.",
+      "housekeepingTitle": "Housekeeping queue",
+      "housekeepingHint": "Beds become clean and available once housekeeping confirms.",
+      "housekeepingCount": "{{count}} awaiting cleaning",
+      "housekeepingEmpty": "No beds are waiting to be cleaned.",
+      "filters": {
+        "all": "All beds"
+      },
+      "status": {
+        "available": "Available",
+        "occupied": "Occupied",
+        "cleaning": "Cleaning",
+        "maintenance": "Maintenance",
+        "reserved": "Reserved"
+      },
+      "wardType": {
+        "general": "General",
+        "semi_private": "Semi-private",
+        "private": "Private",
+        "vip": "VIP",
+        "icu": "ICU",
+        "high_dependency": "High dependency",
+        "isolation": "Isolation",
+        "maternity": "Maternity",
+        "pediatric": "Pediatric",
+        "surgical": "Surgical",
+        "emergency_observation": "Emergency observation"
+      },
+      "gender": {
+        "mixed": "Mixed",
+        "male_only": "Male only",
+        "female_only": "Female only",
+        "pediatric": "Pediatric"
+      },
+      "actions": {
+        "admit": "Admit",
+        "careLog": "Care log",
+        "transfer": "Transfer",
+        "discharge": "Discharge",
+        "markCleaned": "Mark cleaned",
+        "clearMaintenance": "Return to service",
+        "maintenance": "Maintenance",
+        "error": "Could not update the bed.",
+        "missingAdmission": "The open admission for this bed could not be loaded."
+      },
+      "configure": {
+        "title": "Configure wards and beds",
+        "subtitle": "Create a ward and its numbered beds in one step.",
+        "submit": "Create ward",
+        "hint": "Each generated bed inherits the nightly rate and starts as available.",
+        "name": "Ward name",
+        "namePlaceholder": "e.g. General Ward A",
+        "nameRequired": "Enter a ward name.",
+        "type": "Ward type",
+        "floor": "Floor",
+        "floorPlaceholder": "e.g. 2nd floor",
+        "gender": "Gender restriction",
+        "bedCount": "Number of beds",
+        "bedCountInvalid": "Enter between 1 and 100 beds.",
+        "bedPrefix": "Bed label prefix",
+        "bedPrefixHint": "Beds are numbered prefix 1, prefix 2, ...",
+        "dailyRate": "Nightly rate",
+        "dailyRateHint": "Applied to every bed created and used for accommodation billing.",
+        "rateInvalid": "Enter a valid nightly rate (zero or more).",
+        "preview": "{{nights}} at {{rate}} bills {{total}}.",
+        "error": "Could not create the ward."
+      },
+      "metrics": {
+        "total": "Total beds",
+        "available": "Available",
+        "occupied": "Occupied",
+        "cleaning": "Cleaning",
+        "occupancy": "Occupancy"
+      }
+    },
+    "inpatient": {
+      "title": "Inpatient Registry",
+      "subtitle": "Admissions, length of stay, transfers, care logs and discharge.",
+      "openWards": "Wards & beds",
+      "admitPatient": "Admit patient",
+      "search": "Search admissions",
+      "searchPlaceholder": "ADM#, MRN, patient or doctor",
+      "refresh": "Refresh",
+      "loading": "Loading admissions...",
+      "loadError": "Could not load the inpatient registry.",
+      "emptyTitle": "No admissions in this view",
+      "emptyHint": "Admit an outpatient from an open visit or adjust the filter.",
+      "tableCaption": "Inpatient admissions registry",
+      "unknownPatient": "Unknown patient",
+      "noBed": "No bed assigned",
+      "noActions": "No actions",
+      "losNights": "{{count}} night(s)",
+      "nights": "{{count}} night(s)",
+      "nightsAtRate": "{{count}} night(s) at {{rate}}",
+      "expectedDischarge": "Expected {{date}}",
+      "careLogCount": "{{count}} care log(s)",
+      "dischargedNotice": "{{name}} ({{admission}}) was discharged. Review the accommodation charges on the bill.",
+      "openBill": "Open bill",
+      "close": "Close",
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "metrics": {
+        "admitted": "Currently admitted",
+        "discharged": "Discharged",
+        "total": "Total admissions",
+        "availableBeds": "Free beds"
+      },
+      "filters": {
+        "admitted": "Admitted",
+        "discharged": "Discharged",
+        "all": "All"
+      },
+      "status": {
+        "admitted": "Admitted",
+        "discharged": "Discharged",
+        "transferred": "Transferred",
+        "cancelled": "Cancelled"
+      },
+      "columns": {
+        "admission": "ADM #",
+        "patient": "Patient",
+        "bed": "Bed / ward",
+        "admitted": "Admitted",
+        "los": "Length of stay",
+        "doctor": "Attending doctor",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "actions": {
+        "careLog": "Care log",
+        "transfer": "Transfer",
+        "discharge": "Discharge",
+        "notAdmitted": "Only currently admitted patients can be updated."
+      },
+      "admit": {
+        "title": "Admit patient to a bed",
+        "subtitle": "Choose an open visit, an available bed and the clinical team.",
+        "submit": "Admit patient",
+        "patientRequired": "Select the patient visit.",
+        "bedRequired": "Select an available bed.",
+        "doctorRequired": "Select the admitting and attending doctors.",
+        "reasonRequired": "Enter the admission reason.",
+        "error": "Could not admit the patient.",
+        "visit": "Patient visit",
+        "selectVisit": "Select an open visit",
+        "selectedPatient": "{{name}} · MRN {{mrn}}",
+        "bed": "Bed",
+        "selectBed": "Select an available bed",
+        "expectedDischarge": "Expected discharge",
+        "admittingDoctor": "Admitting doctor",
+        "attendingDoctor": "Attending doctor",
+        "selectDoctor": "Select a doctor",
+        "reason": "Admission reason",
+        "reasonPlaceholder": "Presenting complaint and clinical indication for admission"
+      },
+      "transfer": {
+        "title": "Transfer patient bed",
+        "subtitle": "Release the current bed and allocate a new one at its own nightly rate.",
+        "submit": "Transfer bed",
+        "bedRequired": "Select the destination bed.",
+        "error": "Could not transfer the patient.",
+        "currentBed": "Current bed {{bed}} at {{rate}} / night",
+        "noBed": "This admission has no current bed.",
+        "newBed": "Destination bed",
+        "selectBed": "Select an available bed",
+        "reason": "Transfer reason",
+        "reasonPlaceholder": "Clinical or capacity reason for the transfer"
+      },
+      "discharge": {
+        "title": "Discharge patient",
+        "subtitle": "Close the bed stay, record the outcome and prepare the final bill.",
+        "submit": "Discharge patient",
+        "summaryRequired": "Enter a discharge summary.",
+        "error": "Could not discharge the patient.",
+        "loadingCharges": "Calculating accommodation charges...",
+        "chargesTitle": "Accommodation charges",
+        "noCharges": "No billable bed-night charges were recorded.",
+        "total": "Accommodation total",
+        "condition": "Discharge condition",
+        "summary": "Discharge summary",
+        "summaryPlaceholder": "Treatment given, response, follow-up plan and medication on discharge",
+        "billingHint": "Discharging releases the bed to housekeeping. The stay charges are added to the patient bill for cash, HMO or corporate settlement."
+      },
+      "careLog": {
+        "title": "Add inpatient care log",
+        "subtitle": "Record a ward round, nursing note, dietary instruction or incident.",
+        "submit": "Save care log",
+        "noteRequired": "Enter the care note.",
+        "userRequired": "Your user session could not be identified.",
+        "error": "Could not save the care log.",
+        "type": "Log type",
+        "note": "Care note",
+        "notePlaceholder": "Observation, intervention, response and plan"
+      },
+      "careLogType": {
+        "doctor_round": "Doctor round",
+        "nurse_note": "Nurse note",
+        "dietary": "Dietary",
+        "physiotherapy": "Physiotherapy",
+        "incident": "Incident"
+      },
+      "dischargeCondition": {
+        "recovered": "Recovered",
+        "improved": "Improved",
+        "stable": "Stable",
+        "referred": "Referred",
+        "discharged_against_medical_advice": "Discharged against medical advice",
+        "deceased": "Deceased"
+      }
     }
   }
 }

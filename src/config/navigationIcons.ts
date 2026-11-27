@@ -2,6 +2,7 @@ import {
   Activity,
   BadgePercent,
   BarChart3,
+  BedDouble,
   BookOpen,
   Bot,
   Boxes,
@@ -23,6 +24,7 @@ import {
   TrendingUp,
   UserCheck,
   Users,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -31,6 +33,7 @@ const NAV_ICON_COMPONENTS: Record<string, LucideIcon> = {
   Activity,
   BadgePercent,
   BarChart3,
+  BedDouble,
   BookOpen,
   Bot,
   Boxes,
@@ -52,6 +55,7 @@ const NAV_ICON_COMPONENTS: Record<string, LucideIcon> = {
   TrendingUp,
   UserCheck,
   Users,
+  UsersRound,
 };
 
 export function navIcon(name: string | undefined): LucideIcon {

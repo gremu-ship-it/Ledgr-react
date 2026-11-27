@@ -19,6 +19,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { accrueDoctorEarnings } from '@/services/doctorFeeService';
+import {
+  getVisitBedStayCharges,
+  toAccommodationBillItems,
+} from '@/services/inpatientService';
+import type { InpatientAccommodationBillItem } from '@/types/healthcare';
 
 /**
  * The generated Database type predates this vertical, so healthcare tables are
@@ -66,7 +71,12 @@ export const VISIT_STAGE_SEQUENCE: readonly VisitStage[] = [
 ];
 
 export type BillingType = 'cash' | 'insurance' | 'corporate';
-export type BillingCategory = 'consultation' | 'laboratory' | 'pharmacy' | 'procedure';
+export type BillingCategory =
+  | 'consultation'
+  | 'laboratory'
+  | 'pharmacy'
+  | 'procedure'
+  | 'accommodation';
 
 export interface PatientRecord {
   id?: string;
@@ -392,6 +402,8 @@ export interface BillBuildInput {
     quantity?: number | string | null;
     unit_price?: number | string | null;
   }>;
+  /** Inpatient bed-stay lines, one per ward in a transfer chain. */
+  bedStayItems?: ReadonlyArray<InpatientAccommodationBillItem>;
 }
 
 /**
@@ -431,6 +443,20 @@ export function buildBillItems(input: BillBuildInput): BillItem[] {
       quantity,
       unitPrice: price,
       total: roundMoney(quantity * price),
+    });
+  }
+
+  for (const stay of input.bedStayItems ?? []) {
+    const nights = Math.max(1, Math.trunc(toNumber(stay.nights, 1)));
+    const nightlyRate = roundMoney(toNumber(stay.dailyRate));
+    const total = roundMoney(toNumber(stay.total, nights * nightlyRate));
+    if (total <= 0) continue;
+    items.push({
+      description: stay.description,
+      category: 'accommodation',
+      quantity: nights,
+      unitPrice: nightlyRate,
+      total,
     });
   }
 
@@ -1045,10 +1071,14 @@ export async function getPatientVisitBill(visitId: string): Promise<PatientBillS
     (rx) => rx.items ?? [],
   );
 
+  // Inpatient bed-stay lines are computed from the admission's allocation
+  // history, so a transfer produces one line per ward at its applied rate.
+  const bedStayCharges = await getVisitBedStayCharges(typedVisit.business_id, visitId);
   const items = buildBillItems({
     consultationFee: CONSULTATION_FEE,
     labItems,
     prescriptionItems,
+    bedStayItems: toAccommodationBillItems(bedStayCharges),
   });
   const totals = computeBillTotals(items, MEDICAL_TAX_RATE);
 

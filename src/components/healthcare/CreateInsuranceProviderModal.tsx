@@ -48,6 +48,12 @@ function ProviderModalBody({
     String(provider?.default_copay_percent ?? 0),
   );
   const [creditDays, setCreditDays] = useState(String(provider?.credit_period_days ?? 30));
+  const [bedDailyCap, setBedDailyCap] = useState(
+    provider?.bed_daily_cap != null ? String(provider.bed_daily_cap) : '',
+  );
+  const [roomUpgradeChargeToPatient, setRoomUpgradeChargeToPatient] = useState(
+    provider?.room_upgrade_charge_to_patient !== false,
+  );
   const [receivableAccountId, setReceivableAccountId] = useState(
     provider?.receivable_account_id ?? '',
   );
@@ -81,6 +87,11 @@ function ProviderModalBody({
       setError(t('healthcare.insurance.provider.creditInvalid'));
       return;
     }
+    const dailyCap = bedDailyCap.trim() === '' ? null : Number(bedDailyCap);
+    if (dailyCap !== null && (!Number.isFinite(dailyCap) || dailyCap < 0)) {
+      setError(t('healthcare.insurance.provider.bedCapInvalid'));
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -93,6 +104,8 @@ function ProviderModalBody({
         billing_address: billingAddress.trim() || null,
         default_copay_percent: copay,
         credit_period_days: Math.trunc(days),
+        bed_daily_cap: dailyCap,
+        room_upgrade_charge_to_patient: roomUpgradeChargeToPatient,
         receivable_account_id: receivableAccountId || null,
         settlement_account_id: settlementAccountId || null,
         write_off_account_id: writeOffAccountId || null,
@@ -212,6 +225,31 @@ function ProviderModalBody({
               disabled={!canWrite}
             />
           </Field>
+          <Field
+            label={t('healthcare.insurance.provider.bedDailyCap')}
+            hint={t('healthcare.insurance.provider.bedDailyCapHint')}
+          >
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={bedDailyCap}
+              onChange={(event) => setBedDailyCap(event.target.value)}
+              className={INPUT_CLASS}
+              placeholder={t('healthcare.insurance.provider.bedDailyCapPlaceholder')}
+              disabled={!canWrite}
+            />
+          </Field>
+          <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={roomUpgradeChargeToPatient}
+              onChange={(event) => setRoomUpgradeChargeToPatient(event.target.checked)}
+              disabled={!canWrite}
+              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            {t('healthcare.insurance.provider.roomUpgradeCharge')}
+          </label>
           <Field label={t('healthcare.insurance.provider.billingAddress')} className="sm:col-span-2">
             <textarea
               rows={2}

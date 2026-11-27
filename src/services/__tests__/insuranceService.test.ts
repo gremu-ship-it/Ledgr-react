@@ -190,6 +190,27 @@ describe('split-billing math', () => {
     expect(capped.items.every((item) => Math.abs(item.patientShare + item.insurerShare - item.grossAmount) < 0.01)).toBe(true);
   });
 
+  it('applies an HMO bed cap and charges the room-upgrade differential to the patient', () => {
+    const result = calculateSplitBill(
+      [
+        {
+          category: 'accommodation',
+          description: 'Bed stay: Private Wing - Bed 9 (2 nights)',
+          amount: 240_000,
+          quantity: 2,
+          unitPrice: 120_000,
+        },
+      ],
+      10,
+      undefined,
+      { accommodationDailyCap: 80_000, roomUpgradeChargeToPatient: true },
+    );
+
+    expect(result.totalGross).toBe(240_000);
+    expect(result.items[0].patientShare).toBe(96_000);
+    expect(result.items[0].insurerShare).toBe(144_000);
+  });
+
   it('clamps nonsensical percentages', () => {
     const over = calculateSplitBill(
       [{ category: 'other', description: 'Misc', amount: 500 }],

@@ -50,6 +50,7 @@ const CATEGORY_LABEL_KEYS: Record<BillingCategory, string> = {
   laboratory: 'healthcare.billing.categoryLaboratory',
   pharmacy: 'healthcare.billing.categoryPharmacy',
   procedure: 'healthcare.billing.categoryProcedure',
+  accommodation: 'healthcare.billing.categoryAccommodation',
 };
 
 const CATEGORY_STYLES: Record<BillingCategory, string> = {
@@ -57,6 +58,7 @@ const CATEGORY_STYLES: Record<BillingCategory, string> = {
   laboratory: 'bg-amber-50 text-amber-800 border-amber-200',
   pharmacy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   procedure: 'bg-violet-50 text-violet-700 border-violet-200',
+  accommodation: 'bg-sky-50 text-sky-700 border-sky-200',
 };
 
 /** Itemized patient bill and the bridge into Ledgr Invoicing. */
@@ -169,9 +171,24 @@ export function BillingPage() {
         : item.category) as ClaimServiceCategory,
       description: item.description,
       amount: item.total,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
     }));
-    return applyCopayCap(calculateSplitBill(calculatorItems, effectiveCopayPercent), capValue);
-  }, [bill, capValue, effectiveCopayPercent]);
+    return applyCopayCap(
+      calculateSplitBill(calculatorItems, effectiveCopayPercent, undefined, {
+        accommodationDailyCap: selectedProvider?.bed_daily_cap ?? null,
+        roomUpgradeChargeToPatient:
+          selectedProvider?.room_upgrade_charge_to_patient !== false,
+      }),
+      capValue,
+    );
+  }, [
+    bill,
+    capValue,
+    effectiveCopayPercent,
+    selectedProvider?.bed_daily_cap,
+    selectedProvider?.room_upgrade_charge_to_patient,
+  ]);
 
   const insurerInvoiceLines: BillItem[] = useMemo(() => {
     if (!splitBreakdown) return [];
@@ -179,6 +196,7 @@ export function BillingPage() {
       if (category === 'medication') return 'pharmacy';
       if (category === 'laboratory') return 'laboratory';
       if (category === 'consultation') return 'consultation';
+      if (category === 'accommodation') return 'accommodation';
       return 'procedure';
     };
     return splitBreakdown.items
@@ -626,6 +644,14 @@ export function BillingPage() {
                 ) : null}
               </section>
 
+              {selectedProvider?.bed_daily_cap != null &&
+              bill?.items.some((item) => item.category === 'accommodation') ? (
+                <p className="mb-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                  {t('healthcare.billing.bedCapNotice', {
+                    amount: formatCurrency(selectedProvider.bed_daily_cap, currency),
+                  })}
+                </p>
+              ) : null}
               <SplitBillingCard
                 breakdown={splitBreakdown}
                 currency={currency}

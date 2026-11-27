@@ -42,6 +42,8 @@ import {
   Pill,
   FlaskConical,
   HandCoins,
+  BedDouble,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -345,6 +347,20 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         labelKey: 'nav.healthcare.pharmacy',
         path: '/healthcare/pharmacy',
         icon: Pill,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.wardsAndBeds',
+        path: '/healthcare/wards',
+        icon: BedDouble,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.inpatientRegistry',
+        path: '/healthcare/admissions',
+        icon: UsersRound,
         minPlan: 'enterprise',
         requiredOperatingModels: ['HEALTHCARE'],
       },

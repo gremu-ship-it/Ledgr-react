@@ -83,6 +83,8 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
           healthcareItem('doctor_consultation', 'nav.doctorStation', 'Doctor Consultation', '/healthcare/consultation', 'Stethoscope'),
           healthcareItem('lab_diagnostics', 'nav.labDiagnostics', 'Lab Diagnostics', '/healthcare/lab', 'FlaskConical'),
           healthcareItem('pharmacy_dispensary', 'nav.pharmacyDispensary', 'Pharmacy & Dispensary', '/healthcare/pharmacy', 'Pill'),
+          healthcareItem('hospital_wards', 'nav.wardsAndBeds', 'Wards & Beds', '/healthcare/wards', 'BedDouble'),
+          healthcareItem('inpatient_admissions', 'nav.inpatientRegistry', 'Inpatient Registry', '/healthcare/admissions', 'UsersRound'),
         ],
       },
       {
@@ -223,6 +225,8 @@ const NAVIGATION_TARGETS: Readonly<Record<string, string>> = {
   '/settings/organization': '/departments',
   '/settings/departments': '/departments',
   '/insights': '/ai',
+  '/healthcare/wards': '/healthcare/wards',
+  '/healthcare/admissions': '/healthcare/admissions',
 };
 
 export function resolveNavigationTarget(path: string): string {
