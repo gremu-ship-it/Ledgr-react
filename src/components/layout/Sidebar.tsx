@@ -1,11 +1,21 @@
-import { NavLink, useLocation } from 'react-router';
+import { Link, NavLink, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { ChevronsLeft, ChevronsRight, X, Lock, Building2, DollarSign } from 'lucide-react';
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
-import { isItemLocked, navLabelResolver, planRequiredForItem, visibleSectionsFor } from './navConfig';
+import {
+  isItemLocked,
+  navLabelResolver,
+  planRequiredForItem,
+  visibleSectionsFor,
+  type NavSectionConfig,
+} from './navConfig';
+import { buildNavigation, resolveNavigationTarget } from '@/config/navigation';
+import { navIcon } from '@/config/navigationIcons';
+import { useDefaultRoute } from '@/hooks/useDefaultRoute';
+import { isPathAllowedForRole } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useUsage } from '@/hooks/useUsage';
@@ -29,9 +39,44 @@ export function Sidebar() {
   const { isFeatureEnabled } = usePartner();
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const isPlatformAdmin = useIsPlatformAdmin();
-  const visibleSections = visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled, planTier, operatingModels);
+  const landingPath = useDefaultRoute();
+
+  // Pure/hybrid healthcare tenants read the central five-group clinical
+  // builder. Every other tenant keeps the richer capability/partner-aware
+  // NAV_SECTIONS configuration, so construction, manufacturing and retail
+  // navigation is untouched.
+  const clinicalNavigation = useMemo(
+    () => buildNavigation({ subscriptionPlan: planTier, operatingModels }),
+    [operatingModels, planTier],
+  );
+  const isClinicalWorkspace = clinicalNavigation.some(
+    (section) => section.key === 'clinical_operations',
+  );
+  const clinicalSections = useMemo<NavSectionConfig[]>(() => {
+    if (!isClinicalWorkspace) return [];
+    return clinicalNavigation
+      .map((section) => ({
+        labelKey: section.titleKey,
+        items: section.items
+          .filter(
+            (item) =>
+              !role || isPathAllowedForRole(role, resolveNavigationTarget(item.path)),
+          )
+          .map((item) => ({
+            labelKey: item.labelKey,
+            path: item.path,
+            icon: navIcon(item.icon),
+            locked: false,
+          })),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [clinicalNavigation, isClinicalWorkspace, role]);
+
   // `visibleSectionsFor` already applies business labels; the resolver keeps
   // the collapsed-rail tooltip and upgrade prompt aligned with the link text.
+  const visibleSections = isClinicalWorkspace
+    ? clinicalSections
+    : visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled, planTier, operatingModels);
   const labelKeyFor = navLabelResolver(isOrgCapabilityEnabled, operatingModels);
 
   const [isResizing, setIsResizing] = useState(false);
@@ -94,14 +139,20 @@ export function Sidebar() {
         )}
       >
         <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-4 shrink-0">
-          {logoUrl ? (
-            <img src={logoUrl} alt={businessName} className="h-8 w-8 shrink-0 rounded-lg object-cover" />
-          ) : (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">
-              {(businessName || 'L').charAt(0).toUpperCase()}
-            </div>
-          )}
-          {sidebarOpen && <span className="truncate text-[15px] font-semibold text-gray-900">{businessName}</span>}
+          <Link
+            to={landingPath}
+            className="flex min-w-0 items-center gap-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-200"
+            aria-label={businessName || 'Home'}
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt={businessName} className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">
+                {(businessName || 'L').charAt(0).toUpperCase()}
+              </div>
+            )}
+            {sidebarOpen && <span className="truncate text-[15px] font-semibold text-gray-900">{businessName}</span>}
+          </Link>
           {sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(false)}
@@ -121,11 +172,11 @@ export function Sidebar() {
           )}
         >
           {visibleSections.map((section) => {
-            const isSupport = section.labelKey.includes('support');
+            const isSupport = section.labelKey.toLowerCase().includes('support');
             return (
               <div key={section.labelKey} className={clsx('mb-6', isSupport && 'mt-8 pt-6 border-t border-gray-100')}>
                 {sidebarOpen && (
-                  <p className="mb-2 px-3 text-[11px] font-semibold text-gray-400 category-label">
+                  <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                     {t(section.labelKey)}
                   </p>
                 )}
@@ -135,10 +186,13 @@ export function Sidebar() {
                     // Pass 2 already marked plan-locked items; the fallback keeps
                     // any caller-constructed item behaving as before.
                     const locked = item.locked ?? isItemLocked(item, planTier, section.minPlan);
+                    const targetPath = resolveNavigationTarget(item.path);
                     const queryTargetIsActive = item.path.includes('?')
                       && `${location.pathname}${location.search}` === item.path;
                     const isItemActive = (navLinkIsActive: boolean) =>
-                      item.path.includes('?') ? queryTargetIsActive : navLinkIsActive;
+                      item.path.includes('?')
+                        ? queryTargetIsActive
+                        : navLinkIsActive || location.pathname === targetPath;
                     const handleClick = (e: React.MouseEvent) => {
                       if (locked) {
                         e.preventDefault();
@@ -156,6 +210,7 @@ export function Sidebar() {
                       <li key={`${item.labelKey}:${item.path}`} className="group relative">
                         <NavLink
                           to={item.path}
+                          end={isClinicalWorkspace && item.path === '/healthcare'}
                           onClick={handleClick}
                           className={({ isActive }) =>
                             clsx(

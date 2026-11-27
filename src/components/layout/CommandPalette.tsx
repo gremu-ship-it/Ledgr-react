@@ -21,6 +21,9 @@ import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
 import { useDefaultRoute } from '../../hooks/useDefaultRoute';
 import { isOperatingModelEligible, NAV_SECTIONS } from './navConfig';
+import { buildNavigation } from '@/config/navigation';
+import { navIcon } from '@/config/navigationIcons';
+import { normalizePlanTier } from '@/lib/billing/plans';
 
 interface CommandItem {
   id: string;
@@ -37,8 +40,12 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const defaultRoute = useDefaultRoute();
   const businesses = useAppStore((s) => s.businesses);
-  const currentBusinessId = useAppStore((s) => s.currentBusiness?.business.id);
-  const operatingModels = useAppStore((s) => s.currentBusiness?.business?.operating_models ?? null);
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const currentBusinessId = currentBusiness?.business.id;
+  const operatingModels = currentBusiness?.business?.operating_models ?? null;
+  const currentPlan = normalizePlanTier(
+    currentBusiness?.business?.plan_tier ?? currentBusiness?.business?.subscription_plan,
+  );
   const switchBusiness = useAppStore((s) => s.switchBusiness);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -46,10 +53,18 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const clinicalNavigation = useMemo(
+    () => buildNavigation({ subscriptionPlan: currentPlan, operatingModels }),
+    [currentPlan, operatingModels],
+  );
+  const isClinicalWorkspace = clinicalNavigation.some(
+    (section) => section.key === 'clinical_operations',
+  );
+
   const { data: products = [] } = useQuery({
     queryKey: ['command-palette-products', currentBusinessId],
     queryFn: () => repos.inventory.findAllProducts(currentBusinessId!),
-    enabled: open && Boolean(currentBusinessId),
+    enabled: open && Boolean(currentBusinessId) && !isClinicalWorkspace,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -58,30 +73,51 @@ export function CommandPalette() {
     // Vertical isolation: never offer a route that belongs to a different line
     // of business. A retail business must not be able to discover /healthcare
     // (or any other model-gated workspace) through the command palette.
-    const navItems: CommandItem[] = NAV_SECTIONS.flatMap((section) =>
-      section.items
-        .filter((item) => isOperatingModelEligible(item, operatingModels))
-        .map((item) => ({
-          id: item.path,
-          label: t(item.labelKey),
-          keywords: `${t(item.labelKey)} ${item.path} ${t(section.labelKey)}`,
-          path: item.path,
-          icon: item.icon,
-          group: t(section.labelKey),
-        }))
-    );
+    const navItems: CommandItem[] = isClinicalWorkspace
+      ? clinicalNavigation.flatMap((section) =>
+          section.items.map((item) => ({
+            id: item.path,
+            label: t(item.labelKey),
+            keywords: `${t(item.labelKey)} ${item.defaultLabel} ${item.path} ${t(section.titleKey)}`,
+            path: item.path,
+            icon: navIcon(item.icon),
+            group: t(section.titleKey),
+          })),
+        )
+      : NAV_SECTIONS.flatMap((section) =>
+          section.items
+            .filter((item) => isOperatingModelEligible(item, operatingModels))
+            .map((item) => ({
+              id: item.path,
+              label: t(item.labelKey),
+              keywords: `${t(item.labelKey)} ${item.path} ${t(section.labelKey)}`,
+              path: item.path,
+              icon: item.icon,
+              group: t(section.labelKey),
+            }))
+        );
 
-    const quickActions: CommandItem[] = [
-      { id: 'qa-new-invoice', label: t('dashboard.newInvoice'), keywords: 'new invoice create billing', path: '/income?action=invoice', icon: Plus, group: 'Quick Actions' },
-      { id: 'qa-record-income', label: t('dashboard.recordIncome'), keywords: 'record income sale revenue quick', path: '/income?action=record', icon: DollarSign, group: 'Quick Actions' },
-      { id: 'qa-record-expense', label: t('dashboard.recordExpense'), keywords: 'record expense cost quick', path: '/expenses?action=record', icon: Receipt, group: 'Quick Actions' },
-      { id: 'qa-new-expense', label: 'New Expense Builder', keywords: 'expense builder detailed', path: '/expenses?action=expense', icon: Receipt, group: 'Quick Actions' },
-      { id: 'qa-run-payroll', label: t('payroll.title'), keywords: 'payroll employees', path: '/payroll/employees', icon: Users, group: 'Quick Actions' },
-      { id: 'qa-reports', label: 'View Reports', keywords: 'reports analytics trial balance', path: '/reports/trial-balance', icon: BarChart2, group: 'Quick Actions' },
-      { id: 'qa-settings', label: 'Settings', keywords: 'settings configuration billing', path: '/settings', icon: Settings, group: 'Quick Actions' },
-      { id: 'qa-ai', label: 'Ask Ledgr AI', keywords: 'ai assistant help insights', path: '/ai', icon: Sparkles, group: 'Quick Actions' },
-      { id: 'qa-support', label: 'Support', keywords: 'help support contact', path: '/support', icon: LifeBuoy, group: 'Quick Actions' },
-    ];
+    const quickActions: CommandItem[] = isClinicalWorkspace
+      ? [
+          { id: 'qa-clinic-hub', label: t('nav.clinicHub'), keywords: 'clinic queue triage hub', path: '/healthcare', icon: navIcon('Activity'), group: t('nav.quickActions') },
+          { id: 'qa-patient-directory', label: t('nav.patients'), keywords: 'patient registration directory records', path: '/healthcare/patients', icon: navIcon('Users'), group: t('nav.quickActions') },
+          { id: 'qa-patient-billing', label: t('nav.patientBilling'), keywords: 'patient invoice billing payment', path: '/healthcare/billing', icon: navIcon('Receipt'), group: t('nav.quickActions') },
+          { id: 'qa-insurance-claims', label: t('nav.insuranceClaims'), keywords: 'insurance hmo claim remittance', path: '/healthcare/insurance', icon: navIcon('ShieldCheck'), group: t('nav.quickActions') },
+          { id: 'qa-record-expense', label: t('dashboard.recordExpense'), keywords: 'record clinic expense cost quick', path: '/expenses?action=record', icon: Receipt, group: t('nav.quickActions') },
+          { id: 'qa-settings', label: t('nav.settings'), keywords: 'settings configuration billing', path: '/settings', icon: Settings, group: t('nav.quickActions') },
+          { id: 'qa-support', label: t('nav.support'), keywords: 'help support contact', path: '/support', icon: LifeBuoy, group: t('nav.quickActions') },
+        ]
+      : [
+          { id: 'qa-new-invoice', label: t('dashboard.newInvoice'), keywords: 'new invoice create billing', path: '/income?action=invoice', icon: Plus, group: 'Quick Actions' },
+          { id: 'qa-record-income', label: t('dashboard.recordIncome'), keywords: 'record income sale revenue quick', path: '/income?action=record', icon: DollarSign, group: 'Quick Actions' },
+          { id: 'qa-record-expense', label: t('dashboard.recordExpense'), keywords: 'record expense cost quick', path: '/expenses?action=record', icon: Receipt, group: 'Quick Actions' },
+          { id: 'qa-new-expense', label: 'New Expense Builder', keywords: 'expense builder detailed', path: '/expenses?action=expense', icon: Receipt, group: 'Quick Actions' },
+          { id: 'qa-run-payroll', label: t('payroll.title'), keywords: 'payroll employees', path: '/payroll/employees', icon: Users, group: 'Quick Actions' },
+          { id: 'qa-reports', label: 'View Reports', keywords: 'reports analytics trial balance', path: '/reports/trial-balance', icon: BarChart2, group: 'Quick Actions' },
+          { id: 'qa-settings', label: 'Settings', keywords: 'settings configuration billing', path: '/settings', icon: Settings, group: 'Quick Actions' },
+          { id: 'qa-ai', label: 'Ask Ledgr AI', keywords: 'ai assistant help insights', path: '/ai', icon: Sparkles, group: 'Quick Actions' },
+          { id: 'qa-support', label: 'Support', keywords: 'help support contact', path: '/support', icon: LifeBuoy, group: 'Quick Actions' },
+        ];
 
     const businessSwitches: CommandItem[] = businesses.map((m) => ({
       id: `biz-${m.business.id}`,
@@ -95,7 +131,7 @@ export function CommandPalette() {
       },
     }));
 
-    const productCommands: CommandItem[] = (products as Row<'products'>[]).map((product) => ({
+    const productCommands: CommandItem[] = (isClinicalWorkspace ? [] : products as Row<'products'>[]).map((product) => ({
       id: `product-${product.id}`,
       label: product.name,
       keywords: `product ${product.name} ${product.sku ?? ''} ${product.description ?? ''}`,
@@ -105,7 +141,7 @@ export function CommandPalette() {
     }));
 
     return [...productCommands, ...quickActions, ...navItems, ...businessSwitches];
-  }, [t, businesses, switchBusiness, navigate, products, defaultRoute, operatingModels]);
+  }, [t, businesses, switchBusiness, navigate, products, defaultRoute, operatingModels, isClinicalWorkspace, clinicalNavigation]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return commands.slice(0, 20);
@@ -199,7 +235,11 @@ export function CommandPalette() {
                 setOpen(false);
               }
             }}
-            placeholder="Search products, pages, actions, or businesses… (⌘P)"
+            placeholder={
+              isClinicalWorkspace
+                ? t('nav.commandPlaceholderClinic')
+                : t('nav.commandPlaceholder')
+            }
             className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
           />
           <kbd className="hidden sm:inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">ESC</kbd>
@@ -211,8 +251,14 @@ export function CommandPalette() {
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-2">
           {filtered.length === 0 ? (
             <div className="px-4 py-10 text-center">
-              <p className="text-sm font-medium text-gray-500">No results for “{query}”</p>
-              <p className="mt-1 text-xs text-gray-400">Try a product name, SKU, Income, Invoice, or Payroll.</p>
+              <p className="text-sm font-medium text-gray-500">
+                {t('nav.commandEmpty', { query })}
+              </p>
+              <p className="mt-1 text-xs text-gray-400">
+                {isClinicalWorkspace
+                  ? t('nav.commandEmptyHintClinic')
+                  : t('nav.commandEmptyHint')}
+              </p>
             </div>
           ) : (
             <div className="space-y-4">

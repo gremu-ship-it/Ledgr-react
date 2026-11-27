@@ -21,7 +21,10 @@ vi.mock('@/lib/repositories', () => ({
   },
 }));
 
-function setActiveBusiness(operatingModels?: OperatingModel[] | null) {
+function setActiveBusiness(
+  operatingModels?: OperatingModel[] | null,
+  planTier?: string | null,
+) {
   useAppStore.setState({
     currentBusiness: {
       role: 'owner',
@@ -31,6 +34,7 @@ function setActiveBusiness(operatingModels?: OperatingModel[] | null) {
         base_currency: 'MWK',
         organisation_type: 'FOR_PROFIT',
         operating_models: operatingModels ?? null,
+        plan_tier: planTier ?? null,
       },
     },
   });
@@ -103,6 +107,18 @@ describe('useDefaultRoute', () => {
     expect(result.current).toBe('/dashboard');
   });
 
+  it('routes an enterprise healthcare business to the clinic hub', () => {
+    setActiveBusiness(['HEALTHCARE'], 'enterprise');
+    const { result } = renderHook(() => useDefaultRoute());
+    expect(result.current).toBe('/healthcare');
+  });
+
+  it('keeps standard healthcare on the dashboard outside the enterprise plan', () => {
+    setActiveBusiness(['HEALTHCARE'], 'growth');
+    const { result } = renderHook(() => useDefaultRoute());
+    expect(result.current).toBe('/dashboard');
+  });
+
   it('routes to /dashboard when no business profile is loaded', () => {
     const { result } = renderHook(() => useDefaultRoute());
     expect(result.current).toBe('/dashboard');
@@ -117,6 +133,7 @@ describe('SmartRedirect and direct route navigation', () => {
         <Routes>
           <Route path="/construction/*" element={<div>construction-page</div>} />
           <Route path="/manufacturing" element={<div>manufacturing-page</div>} />
+          <Route path="/healthcare" element={<div>healthcare-page</div>} />
           <Route path="/dashboard" element={<div>dashboard-page</div>} />
           <Route path="/" element={<SmartRedirect />} />
           <Route path="*" element={<SmartRedirect />} />
@@ -145,6 +162,13 @@ describe('SmartRedirect and direct route navigation', () => {
       expectedMarker: 'dashboard-page',
     },
     {
+      label: '[HEALTHCARE] enterprise',
+      models: ['HEALTHCARE'] as OperatingModel[],
+      planTier: 'enterprise',
+      expectedPath: '/healthcare',
+      expectedMarker: 'healthcare-page',
+    },
+    {
       label: 'no operating models',
       models: [] as OperatingModel[],
       expectedPath: '/dashboard',
@@ -152,10 +176,11 @@ describe('SmartRedirect and direct route navigation', () => {
     },
   ])('redirects / and unmatched routes for $label to $expectedPath', ({
     models,
+    planTier,
     expectedPath,
     expectedMarker,
   }) => {
-    setActiveBusiness(models);
+    setActiveBusiness(models, planTier);
 
     const { unmount } = renderRouter('/');
     expect(screen.getByTestId('pathname').textContent).toBe(expectedPath);
@@ -188,6 +213,47 @@ describe('SmartRedirect and direct route navigation', () => {
     expect(appSource).toContain('path="/manufacturing"');
     expect(appSource).toContain('path="/dashboard"');
     expect(appSource).toContain('<SmartRedirect />');
+  });
+});
+
+describe('CommandPalette clinical command set', () => {
+  it('offers clinical pages and suppresses generic income and inventory', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    useAppStore.setState({
+      currentBusiness: {
+        role: 'owner',
+        business: {
+          id: '30000000-0000-0000-0000-000000000003',
+          name: 'Clinic Business',
+          base_currency: 'MWK',
+          organisation_type: 'FOR_PROFIT',
+          operating_models: ['HEALTHCARE'],
+          plan_tier: 'enterprise',
+        },
+      },
+      businesses: [],
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/healthcare']}>
+          <LocationProbe />
+          <CommandPalette />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    fireEvent(window, new Event('ledgr:open-command-palette'));
+
+    expect(screen.getByPlaceholderText(/Search patients, clinic pages, or actions/i)).toBeTruthy();
+    expect(screen.getAllByText('Clinic Hub & Queue').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pharmacy & Dispensary').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Insurance & HMO Claims').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Income')).toBeNull();
+    expect(screen.queryByText('Invoices')).toBeNull();
+    expect(screen.queryByText('Inventory')).toBeNull();
   });
 });
 
