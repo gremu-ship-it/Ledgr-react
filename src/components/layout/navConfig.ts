@@ -38,6 +38,10 @@ import {
   CircleDollarSign,
   Calculator,
   Target,
+  Stethoscope,
+  Pill,
+  FlaskConical,
+  HandCoins,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -299,6 +303,71 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         icon: MapPin,
         minPlan: 'enterprise',
         requiresOrgCapability: 'manufacturing',
+      },
+    ],
+  },
+  {
+    labelKey: 'nav.healthcare.title',
+    minPlan: 'enterprise',
+    items: [
+      {
+        // Vertical isolation: an absent HEALTHCARE operating model removes the
+        // whole section in pass 1, so a retail business never sees a clinic
+        // route or a locked clinic icon.
+        labelKey: 'nav.healthcare.workspace',
+        path: '/healthcare',
+        icon: Stethoscope,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.patients',
+        path: '/healthcare/patients',
+        icon: Users,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.consultation',
+        path: '/healthcare/consultation',
+        icon: ClipboardList,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.billing',
+        path: '/healthcare/billing',
+        icon: Receipt,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.pharmacy',
+        path: '/healthcare/pharmacy',
+        icon: Pill,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.lab',
+        path: '/healthcare/lab',
+        icon: FlaskConical,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.insurance',
+        path: '/healthcare/insurance',
+        icon: ShieldCheck,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
+        labelKey: 'nav.healthcare.doctorFees',
+        path: '/healthcare/doctor-fees',
+        icon: HandCoins,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
       },
     ],
   },

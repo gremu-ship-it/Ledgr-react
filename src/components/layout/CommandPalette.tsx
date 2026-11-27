@@ -20,7 +20,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
 import { useDefaultRoute } from '../../hooks/useDefaultRoute';
-import { NAV_SECTIONS } from './navConfig';
+import { isOperatingModelEligible, NAV_SECTIONS } from './navConfig';
 
 interface CommandItem {
   id: string;
@@ -38,6 +38,7 @@ export function CommandPalette() {
   const defaultRoute = useDefaultRoute();
   const businesses = useAppStore((s) => s.businesses);
   const currentBusinessId = useAppStore((s) => s.currentBusiness?.business.id);
+  const operatingModels = useAppStore((s) => s.currentBusiness?.business?.operating_models ?? null);
   const switchBusiness = useAppStore((s) => s.switchBusiness);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -54,15 +55,20 @@ export function CommandPalette() {
 
   // Build command list
   const commands: CommandItem[] = useMemo(() => {
+    // Vertical isolation: never offer a route that belongs to a different line
+    // of business. A retail business must not be able to discover /healthcare
+    // (or any other model-gated workspace) through the command palette.
     const navItems: CommandItem[] = NAV_SECTIONS.flatMap((section) =>
-      section.items.map((item) => ({
-        id: item.path,
-        label: t(item.labelKey),
-        keywords: `${t(item.labelKey)} ${item.path} ${t(section.labelKey)}`,
-        path: item.path,
-        icon: item.icon,
-        group: t(section.labelKey),
-      }))
+      section.items
+        .filter((item) => isOperatingModelEligible(item, operatingModels))
+        .map((item) => ({
+          id: item.path,
+          label: t(item.labelKey),
+          keywords: `${t(item.labelKey)} ${item.path} ${t(section.labelKey)}`,
+          path: item.path,
+          icon: item.icon,
+          group: t(section.labelKey),
+        }))
     );
 
     const quickActions: CommandItem[] = [
@@ -99,7 +105,7 @@ export function CommandPalette() {
     }));
 
     return [...productCommands, ...quickActions, ...navItems, ...businessSwitches];
-  }, [t, businesses, switchBusiness, navigate, products, defaultRoute]);
+  }, [t, businesses, switchBusiness, navigate, products, defaultRoute, operatingModels]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return commands.slice(0, 20);

@@ -35,8 +35,9 @@ describe('manufacturing foundation migration contract', () => {
     // grant hardening, followed by the employee-audit resource-id type fix,
     // supervisor financial reads, the journal reversal command, stock-transfer
     // UUID source-id repair, cross-domain casting/reversal hardening, its
-    // forward repair restoring the contained inventory-backfill contract, and
-    // the supervisor transaction-visibility restatement.
+    // forward repair restoring the contained inventory-backfill contract, the
+    // supervisor transaction-visibility restatement, the subscription lease
+    // engine, manufacturing costing, and the healthcare clinic foundation.
     // Keep the migration head list below aligned with both lines.
     expect([
       '20261224000003',
@@ -92,6 +93,9 @@ describe('manufacturing foundation migration contract', () => {
       '20261225000002',
       '20261226000000',
       '20261227000000',
+      '20261229000000',
+      '20261230000000',
+      '20261231000000',
     ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);

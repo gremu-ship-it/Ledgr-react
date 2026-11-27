@@ -21,6 +21,7 @@ export const OPERATING_MODELS = [
   'GRANT_FUNDED',
   'CONSTRUCTION',
   'MANUFACTURING',
+  'HEALTHCARE',
 ] as const;
 
 export type OperatingModel = (typeof OPERATING_MODELS)[number];
@@ -38,6 +39,7 @@ export const OPERATING_MODEL_LABELS: Readonly<Record<OperatingModel, string>> = 
   GRANT_FUNDED: 'Grant-funded',
   CONSTRUCTION: 'Construction',
   MANUFACTURING: 'Manufacturing',
+  HEALTHCARE: 'Healthcare & clinic',
 };
 
 export const ORGANISATION_CAPABILITIES = [
@@ -88,6 +90,10 @@ const MODEL_CAPABILITIES: Readonly<Record<OperatingModel, readonly OrganisationC
   // vocabulary that a construction business legitimately uses for its own
   // contracted work.
   MANUFACTURING: ['sales', 'inventory', 'manufacturing'],
+  // A clinic sells clinical services and dispenses products from its pharmacy
+  // catalogue. POS stays off: the healthcare till is the patient billing
+  // screen, which raises an AR invoice rather than a retail receipt.
+  HEALTHCARE: ['sales', 'services'],
 };
 
 /**
@@ -121,7 +127,8 @@ export function deriveOrganisationCapabilityDefaults(
     && !models.has('PRODUCT_SALES')
     && !models.has('SERVICE_SALES')
     && !models.has('CONSTRUCTION')
-    && !models.has('MANUFACTURING');
+    && !models.has('MANUFACTURING')
+    && !models.has('HEALTHCARE');
 
   return {
     sales: enabled.has('sales') || !pureGrantFunded,

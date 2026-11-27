@@ -26,6 +26,11 @@ export interface Business {
   name: string;
   base_currency?: string | null;
   plan_tier?: string | null;
+  /**
+   * Legacy billing column still present on some deployments. Healthcare gates
+   * on the effective plan, so callers may read either this or `plan_tier`.
+   */
+  subscription_plan?: string | null;
   /** New profile columns are optional in the app type to hydrate old cached rows safely. */
   organisation_type?: OrganisationType | null;
   operating_models?: OperatingModel[] | null;
