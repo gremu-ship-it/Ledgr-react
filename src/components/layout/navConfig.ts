@@ -102,7 +102,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.finance',
     items: [
       { labelKey: 'navigation.items.income', path: '/income', icon: DollarSign },
-      { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt },
+      { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, verticalLabelOverrides: { HEALTHCARE: 'nav.clinicExpenses' } },
       { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText },
     ],
   },
@@ -414,7 +414,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.assetsCapital',
     items: [
-      { labelKey: 'navigation.items.fixedAssets', path: '/assets', icon: Landmark, minPlan: 'starter', requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.fixedAssets', path: '/assets', icon: Landmark, minPlan: 'starter', requiresCapability: 'core_accounting', verticalLabelOverrides: { HEALTHCARE: 'nav.medicalEquipment' } },
       { labelKey: 'navigation.items.depreciation', path: '/reports/depreciation', icon: Calculator, minPlan: 'growth' },
       { labelKey: 'navigation.items.capitalEquity', path: '/capital', icon: Coins, minPlan: 'starter', requiresCapability: 'core_accounting' },
     ],
@@ -425,13 +425,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
       { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth', requiresCapability: 'accounting_organisation', hiddenWhenSitesReplaceBranches: true },
       { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
-      { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+      { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth', requiresCapability: 'accounting_organisation', verticalLabelOverrides: { HEALTHCARE: 'nav.clinicalDepartments' } },
     ],
   },
   {
     labelKey: 'navigation.sections.audit',
     items: [
-      { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+      { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck, minPlan: 'growth', requiresCapability: 'accounting_organisation', verticalLabelOverrides: { HEALTHCARE: 'nav.complianceAudit' } },
     ],
   },
   {

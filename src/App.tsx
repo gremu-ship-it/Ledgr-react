@@ -1213,6 +1213,22 @@ function App() {
               </Route>
             </Route>
 
+            {/* Contextual workspace aliases. The clinical sidebar uses
+                department-facing labels and canonical module paths; these
+                redirects keep every link live without moving the existing
+                routes. */}
+            <Route path="/banking" element={<Navigate to="/bank-reconciliation/accounts" replace />} />
+            <Route path="/taxation" element={<Navigate to="/tax" replace />} />
+            <Route path="/accounting" element={<Navigate to="/accounts" replace />} />
+            <Route path="/inventory" element={<Navigate to="/products" replace />} />
+            <Route path="/reports" element={<Navigate to="/reports/trial-balance" replace />} />
+            <Route path="/budgets" element={<Navigate to="/reports/budgets" replace />} />
+            <Route path="/audit-logs" element={<Navigate to="/audit" replace />} />
+            <Route path="/organization" element={<Navigate to="/departments" replace />} />
+            <Route path="/settings/organization" element={<Navigate to="/departments" replace />} />
+            <Route path="/settings/departments" element={<Navigate to="/departments" replace />} />
+            <Route path="/insights" element={<Navigate to="/ai" replace />} />
+
             {/* Fallbacks */}
             <Route
               path="/"

@@ -40,6 +40,8 @@ import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
 import { isItemLocked, isOperatingModelEligible, navItemForPath, navLabelResolver, planRequiredForItem } from '@/components/layout/navConfig';
+import { buildNavigation } from '@/config/navigation';
+import { navIcon } from '@/config/navigationIcons';
 import { getHomePathForRole, isPathAllowedForRole, usePermissions } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
@@ -51,6 +53,14 @@ const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.sections.finance', path: '/income', icon: DollarSign },
   { labelKey: 'navigation.sections.inventory', path: '/products', icon: Package },
   { labelKey: 'navigation.items.reports', path: '/reports/trial-balance', icon: BarChart2 },
+];
+
+/** Four clinical tabs replace the generic trading tabs for a clinic tenant. */
+const CLINICAL_BOTTOM_NAV_ITEMS = [
+  { labelKey: 'nav.clinicHub', path: '/healthcare', icon: navIcon('Activity') },
+  { labelKey: 'nav.patientBilling', path: '/healthcare/billing', icon: navIcon('Receipt') },
+  { labelKey: 'nav.pharmacyDispensary', path: '/healthcare/pharmacy', icon: navIcon('Pill') },
+  { labelKey: 'nav.insuranceClaims', path: '/healthcare/insurance', icon: navIcon('ShieldCheck') },
 ];
 
 /**
@@ -111,6 +121,13 @@ export function BottomNav() {
   const operatingModels = currentBusiness?.business?.operating_models ?? null;
   const businessId = currentBusiness?.business?.id;
   const { planTier } = useUsage();
+  const clinicalNavigation = useMemo(
+    () => buildNavigation({ subscriptionPlan: planTier, operatingModels }),
+    [operatingModels, planTier],
+  );
+  const isClinicalWorkspace = clinicalNavigation.some(
+    (section) => section.key === 'clinical_operations',
+  );
 
   const { isFeatureEnabled } = usePartner();
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
@@ -143,10 +160,32 @@ export function BottomNav() {
   // Material Transfers here exactly as it does in the sidebar.
   const { bottomItems, moreItems } = useMemo(() => {
     const navLabelFor = navLabelResolver(isOrgCapabilityEnabled, operatingModels);
-    const primaryItems = (homeIsPos && posNavItem
-      ? [posNavItem, ...BOTTOM_NAV_ITEMS]
-      : BOTTOM_NAV_ITEMS
-    ).map((item) => ({ ...item, labelKey: navLabelFor(item.labelKey) }));
+    const sourcePrimaryItems = isClinicalWorkspace
+      ? CLINICAL_BOTTOM_NAV_ITEMS
+      : homeIsPos && posNavItem
+        ? [posNavItem, ...BOTTOM_NAV_ITEMS]
+        : BOTTOM_NAV_ITEMS;
+    const primaryItems = sourcePrimaryItems.map((item) => ({
+      ...item,
+      labelKey: navLabelFor(item.labelKey),
+    }));
+    const sourceMoreItems: Array<{
+      labelKey: string;
+      path: string;
+      icon: LucideIcon;
+      tone: IconTone;
+      partnerFeature?: PartnerFeatureKey;
+    }> = isClinicalWorkspace
+      ? clinicalNavigation
+          .flatMap((section) => section.items)
+          .filter((item) => !CLINICAL_BOTTOM_NAV_ITEMS.some((tab) => tab.path === item.path))
+          .map((item) => ({
+            labelKey: item.labelKey,
+            path: item.path,
+            icon: navIcon(item.icon),
+            tone: 'brand' as IconTone,
+          }))
+      : ALL_MORE_MENU_ITEMS;
 
     return {
       bottomItems: primaryItems
@@ -159,7 +198,7 @@ export function BottomNav() {
         })
         .filter((i) => allowedForRole(i.path))
         .slice(0, MAX_PRIMARY_TABS),
-      moreItems: ALL_MORE_MENU_ITEMS
+      moreItems: sourceMoreItems
         .filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature))
         .filter((i) => {
           const navItem = navItemForPath(i.path);
@@ -169,7 +208,7 @@ export function BottomNav() {
         .filter((i) => allowedForRole(i.path))
         .map((i) => ({ ...i, labelKey: navLabelFor(i.labelKey) })),
     };
-  }, [homeIsPos, posNavItem, isFeatureEnabled, isOrgCapabilityEnabled, operatingModels, allowedForRole]);
+  }, [homeIsPos, posNavItem, isFeatureEnabled, isOrgCapabilityEnabled, operatingModels, allowedForRole, isClinicalWorkspace, clinicalNavigation]);
 
   // The FAB writes, so an action needs both gates:
   //   canWrite             — a viewer or auditor may open /income and /expenses
@@ -182,10 +221,12 @@ export function BottomNav() {
   //                          20260922000000_pos_role_write_scope.sql. A role
   //                          with no action left gets no FAB at all.
   const canQuickAdd = (path: string) => canWrite && allowedForRole(path);
-  const canCreateInvoice = canQuickAdd('/income');
-  const canRecordIncome = canQuickAdd('/income');
+  const canCreateInvoice = !isClinicalWorkspace && canQuickAdd('/income');
+  const canRecordIncome = !isClinicalWorkspace && canQuickAdd('/income');
   const canRecordExpense = canQuickAdd('/expenses');
-  const canRecordStock = canQuickAdd('/warehouse') && isOrgCapabilityEnabled('inventory');
+  const canRecordStock = !isClinicalWorkspace
+    && canQuickAdd('/warehouse')
+    && isOrgCapabilityEnabled('inventory');
   // Same construction-vocabulary pattern as the nav label overrides: site
   // staff move materials, not stock. Construction resolves from the
   // organisation profile, so this matches the sidebar in every plan/role.
