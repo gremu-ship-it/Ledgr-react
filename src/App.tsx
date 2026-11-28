@@ -194,6 +194,7 @@ const BudgetNewPage = lazyPage(() => import('@/pages/reports/BudgetNewPage'), 'B
 const BudgetVsActualPage = lazyPage(() => import('@/pages/reports/BudgetVsActualPage'), 'BudgetVsActualPage');
 const DepreciationRunPage = lazyPage(() => import('@/pages/reports/DepreciationRunPage'), 'DepreciationRunPage');
 const ExchangeRatesPage = lazyPage(() => import('@/pages/ExchangeRatesPage'), 'ExchangeRatesPage');
+const ReportsPage = lazyPage(() => import('@/pages/Reports'), 'ReportsPage');
 const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
 const BalanceSheetPage = lazyPage(() => import('@/pages/reports/BalanceSheetPage'), 'BalanceSheetPage');
@@ -264,6 +265,15 @@ export function RoleRoute() {
   }
 
   return <Outlet />;
+}
+
+function ReportsRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate capability="accounting_organisation" featureName={t('reports.reports')}>
+      <ReportsPage />
+    </PlanGate>
+  );
 }
 
 function TrialBalanceRoute() {
@@ -1099,6 +1109,7 @@ function App() {
                       <TaxPage />
                     </PlanGate>
                   } />
+                  <Route path="/reports" element={<ReportsRoute />} />
                   <Route path="/reports/trial-balance" element={<TrialBalanceRoute />} />
                   <Route path="/reports/profit-loss" element={<ProfitLossRoute />} />
                   <Route path="/reports/balance-sheet" element={<BalanceSheetRoute />} />
@@ -1260,10 +1271,6 @@ function App() {
               element={<WorkspaceTabRedirect basePath="/accounting" fallback="/accounts" />}
             />
             <Route path="/inventory" element={<Navigate to="/products" replace />} />
-            <Route
-              path="/reports"
-              element={<WorkspaceTabRedirect basePath="/reports" fallback="/reports/trial-balance" />}
-            />
             <Route path="/budgets" element={<Navigate to="/reports/budgets" replace />} />
             <Route path="/audit-logs" element={<Navigate to="/audit" replace />} />
             <Route path="/organization" element={<Navigate to="/departments" replace />} />

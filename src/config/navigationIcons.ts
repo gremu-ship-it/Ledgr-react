@@ -37,6 +37,7 @@ import {
   UserCheck,
   Users,
   UsersRound,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -80,6 +81,7 @@ const NAV_ICON_COMPONENTS: Record<string, LucideIcon> = {
   UserCheck,
   Users,
   UsersRound,
+  Wallet,
 };
 
 export function navIcon(name: string | undefined): LucideIcon {
