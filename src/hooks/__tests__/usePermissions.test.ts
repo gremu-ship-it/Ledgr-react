@@ -35,6 +35,7 @@ describe('Role-Based Access Control (RBAC)', () => {
         expect(isPathAllowedForRole(role, '/invoices')).toBe(true);
         expect(isPathAllowedForRole(role, '/dashboard')).toBe(false);
         expect(isPathAllowedForRole(role, '/payroll')).toBe(false);
+        expect(isPathAllowedForRole(role, '/reports')).toBe(false);
         expect(isPathAllowedForRole(role, '/reports/trial-balance')).toBe(false);
         expect(isPathAllowedForRole(role, '/products')).toBe(false);
       }
@@ -85,6 +86,7 @@ describe('Role-Based Access Control (RBAC)', () => {
       expect(isPathAllowedForRole('payroll_manager', '/payroll/employees/employee-1')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/payroll/leave')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/dashboard')).toBe(true);
+      expect(isPathAllowedForRole('payroll_manager', '/reports')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/products')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/accounts')).toBe(false);
@@ -111,11 +113,36 @@ describe('Role-Based Access Control (RBAC)', () => {
   describe('Supervisor & Auditor restrictions', () => {
     it('blocks payroll for supervisors, auditors, and viewers', () => {
       expect(isPathAllowedForRole('supervisor', '/payroll')).toBe(false);
+      expect(isPathAllowedForRole('supervisor', '/reports')).toBe(false);
       expect(isPathAllowedForRole('supervisor', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('auditor', '/payroll')).toBe(false);
       expect(isPathAllowedForRole('auditor', '/payroll/employees')).toBe(false);
       expect(isPathAllowedForRole('viewer', '/payroll')).toBe(false);
       expect(isPathAllowedForRole('viewer', '/payroll/employees')).toBe(false);
+    });
+  });
+
+  describe('Reports workspace root', () => {
+    it('allows the /reports workspace for roles that can read the individual reports', () => {
+      for (const role of [
+        'owner',
+        'admin',
+        'manager',
+        'sales_manager',
+        'tax_compliance_officer',
+        'treasury_manager',
+        'asset_manager',
+        'board_member',
+        'auditor',
+        'viewer',
+        'branch_manager',
+      ]) {
+        expect(isPathAllowedForRole(role, '/reports')).toBe(true);
+      }
+
+      for (const role of ['cashier', 'sales_clerk', 'data_entry', 'customer_service_rep']) {
+        expect(isPathAllowedForRole(role, '/reports')).toBe(false);
+      }
     });
   });
 
