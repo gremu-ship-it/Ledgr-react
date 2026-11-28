@@ -23,6 +23,9 @@ import {
   StageBadge,
 } from '@/components/healthcare/healthcareUi';
 import { TriageVitalsModal } from '@/components/healthcare/TriageVitalsModal';
+import { AcuityBadge } from '@/components/healthcare/AcuityBadge';
+import { QueueTokenBadge } from '@/components/healthcare/QueueTokenBadge';
+import { MultiOrderSheet } from '@/components/healthcare/MultiOrderSheet';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAppStore } from '@/store/useAppStore';
 import {
@@ -53,6 +56,10 @@ import {
   hasVitals,
   patientDisplayName,
 } from '@/lib/healthcare/format';
+import {
+  markResultsReviewed,
+  sortVisitsByAcuity,
+} from '@/services/clinicalFlowService';
 
 const INPUT_CLASS =
   'mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
@@ -112,11 +119,15 @@ export function ConsultationRoomPage() {
   const patientId = searchParams.get('patientId');
 
   const businessId = useAppStore((state) => state.currentBusiness?.business?.id ?? null);
+  const doctorId = useAppStore((state) => state.currentUser?.id ?? null);
   const { canWrite } = usePermissions();
   const [triageVisit, setTriageVisit] = useState<PatientVisit | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [startingVisit, setStartingVisit] = useState(false);
+  const [queueTab, setQueueTab] = useState<'waiting' | 'review' | 'all'>('waiting');
+  const [multiOrderOpen, setMultiOrderOpen] = useState(false);
+  const [reviewingResults, setReviewingResults] = useState(false);
 
   const visitsQuery = useQuery({
     queryKey: ['healthcare', 'openVisits', businessId],
@@ -175,6 +186,20 @@ export function ConsultationRoomPage() {
     ]);
   };
 
+  const sortedQueue = useMemo(
+    () => sortVisitsByAcuity(visitsQuery.data ?? []),
+    [visitsQuery.data],
+  );
+  const reviewVisits = useMemo(
+    () => sortedQueue.filter((candidate) => candidate.results_ready_for_review),
+    [sortedQueue],
+  );
+  const visibleQueue = useMemo(() => {
+    if (queueTab === 'review') return reviewVisits;
+    if (queueTab === 'all') return sortedQueue;
+    return sortedQueue.filter((candidate) => !candidate.results_ready_for_review);
+  }, [queueTab, reviewVisits, sortedQueue]);
+
   const startVisit = async (patient: PatientRecord) => {
     if (!businessId || !patient.id) return;
     setStartError(null);
@@ -190,6 +215,23 @@ export function ConsultationRoomPage() {
       );
     } finally {
       setStartingVisit(false);
+    }
+  };
+
+  const handleMarkReviewed = async () => {
+    if (!businessId || !visit?.id) return;
+    setReviewingResults(true);
+    setStartError(null);
+    try {
+      await markResultsReviewed(businessId, visit.id);
+      setStatusMessage(t('healthcare.review.reviewed'));
+      await invalidateVisit();
+    } catch (error) {
+      setStartError(
+        error instanceof Error ? error.message : t('healthcare.consultation.saveError'),
+      );
+    } finally {
+      setReviewingResults(false);
     }
   };
 
@@ -256,7 +298,51 @@ export function ConsultationRoomPage() {
             }
           />
         )}
-        {visitsQuery.isSuccess && (visitsQuery.data ?? []).length === 0 && (
+
+        <div className="mb-3 flex flex-wrap items-center gap-1.5" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={queueTab === 'waiting'}
+            onClick={() => setQueueTab('waiting')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              queueTab === 'waiting'
+                ? 'bg-gray-900 text-white'
+                : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {t('healthcare.consultation.queueWaiting')} ({sortedQueue.length - reviewVisits.length})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={queueTab === 'review'}
+            onClick={() => setQueueTab('review')}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              queueTab === 'review'
+                ? 'bg-orange-600 text-white'
+                : 'border border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100'
+            }`}
+          >
+            <FlaskConical className="h-3.5 w-3.5" aria-hidden />
+            {t('healthcare.review.badge', { count: reviewVisits.length })}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={queueTab === 'all'}
+            onClick={() => setQueueTab('all')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              queueTab === 'all'
+                ? 'bg-gray-900 text-white'
+                : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {t('healthcare.consultation.queueAll')} ({sortedQueue.length})
+          </button>
+        </div>
+
+        {visitsQuery.isSuccess && sortedQueue.length === 0 && (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-12 text-center">
             <ClipboardList className="mx-auto h-8 w-8 text-gray-300" aria-hidden />
             <p className="mt-2 text-sm font-medium text-gray-700">{t('healthcare.consultation.noOpenVisits')}</p>
@@ -265,30 +351,50 @@ export function ConsultationRoomPage() {
             </Link>
           </div>
         )}
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {(visitsQuery.data ?? []).map((candidate) => (
-            <li key={candidate.id}>
-              <button
-                type="button"
-                onClick={() => candidate.id && setSearchParams({ visitId: candidate.id })}
-                className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-300 hover:ring-2 hover:ring-brand-100"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-semibold text-gray-900">
+        {visitsQuery.isSuccess && sortedQueue.length > 0 && visibleQueue.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center text-sm text-gray-500">
+            {queueTab === 'review' ? t('healthcare.review.empty') : t('healthcare.consultation.queueEmpty')}
+          </div>
+        )}
+        {visibleQueue.length > 0 && (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {visibleQueue.map((candidate) => (
+              <li key={candidate.id}>
+                <button
+                  type="button"
+                  onClick={() => candidate.id && setSearchParams({ visitId: candidate.id })}
+                  className={`w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-brand-300 hover:ring-2 hover:ring-brand-100 ${
+                    candidate.results_ready_for_review
+                      ? 'border-orange-300 ring-1 ring-orange-100'
+                      : 'border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <QueueTokenBadge token={candidate.queue_token} size="sm" />
+                      <AcuityBadge acuity={candidate.acuity_level} showIcon={false} />
+                    </span>
+                    <StageBadge stage={candidate.stage} />
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">
                     {patientDisplayName(candidate.patient)}
-                  </span>
-                  <StageBadge stage={candidate.stage} />
-                </div>
-                <p className="mt-1 font-mono text-[11px] text-gray-500">
-                  {candidate.patient?.mrn ?? '—'} · {candidate.visit_number}
-                </p>
-                <p className="mt-2 text-[11px] text-gray-400">
-                  {t(`healthcare.visitType.${candidate.visit_type}`)} · {formatDateValue(candidate.visit_date)}
-                </p>
-              </button>
-            </li>
-          ))}
-        </ul>
+                  </p>
+                  <p className="mt-1 font-mono text-[11px] text-gray-500">
+                    {candidate.patient?.mrn ?? '—'} · {candidate.visit_number}
+                  </p>
+                  {candidate.results_ready_for_review && (
+                    <p className="mt-2 inline-flex rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-800">
+                      {t('healthcare.review.ready')}
+                    </p>
+                  )}
+                  <p className="mt-2 text-[11px] text-gray-400">
+                    {t(`healthcare.visitType.${candidate.visit_type}`)} · {formatDateValue(candidate.visit_date)}
+                  </p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     );
   }
@@ -325,6 +431,39 @@ export function ConsultationRoomPage() {
           {statusMessage}
         </p>
       )}
+      {startError && <div className="mb-3"><ErrorNotice message={startError} /></div>}
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <QueueTokenBadge token={visit.queue_token} />
+          <AcuityBadge acuity={visit.acuity_level} />
+          <StageBadge stage={visit.stage} />
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => setMultiOrderOpen(true)}>
+          <ClipboardList className="h-3.5 w-3.5" aria-hidden />
+          {t('healthcare.consultation.multiOrder')}
+        </Button>
+      </div>
+
+      {visit.results_ready_for_review && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-300 bg-orange-50 px-3 py-2.5">
+          <div className="flex items-start gap-2">
+            <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-orange-700" aria-hidden />
+            <div>
+              <p className="text-sm font-semibold text-orange-900">{t('healthcare.review.title')}</p>
+              <p className="text-xs text-orange-800">{t('healthcare.review.hint')}</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => void handleMarkReviewed()}
+            isLoading={reviewingResults}
+            disabled={!canWrite}
+          >
+            {t('healthcare.review.markReviewed')}
+          </Button>
+        </div>
+      )}
 
       {clinicalDataReady ? (
         <ConsultationEditor
@@ -360,6 +499,19 @@ export function ConsultationRoomPage() {
           }}
         />
       )}
+
+      <MultiOrderSheet
+        open={multiOrderOpen}
+        onClose={() => setMultiOrderOpen(false)}
+        businessId={businessId}
+        visit={visit}
+        doctorId={doctorId}
+        canWrite={canWrite}
+        onSaved={async (message) => {
+          setStatusMessage(message);
+          await invalidateVisit();
+        }}
+      />
     </div>
   );
 }

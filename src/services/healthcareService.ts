@@ -23,7 +23,12 @@ import {
   getVisitBedStayCharges,
   toAccommodationBillItems,
 } from '@/services/inpatientService';
-import type { InpatientAccommodationBillItem } from '@/types/healthcare';
+import { nextQueueToken } from '@/lib/healthcare/queue';
+import type {
+  AcuityLevel,
+  InpatientAccommodationBillItem,
+  TelemedicineStatus,
+} from '@/types/healthcare';
 
 /**
  * The generated Database type predates this vertical, so healthcare tables are
@@ -39,14 +44,25 @@ export const CONSULTATION_FEE = 15_000;
 /** Medical services are VAT exempt in this workflow. */
 export const MEDICAL_TAX_RATE = 0;
 
-export type VisitType = 'outpatient' | 'emergency' | 'follow_up' | 'routine_checkup';
+export type VisitType =
+  | 'outpatient'
+  | 'emergency'
+  | 'follow_up'
+  | 'routine_checkup'
+  | 'in_person'
+  | 'telemedicine'
+  | 'home_visit';
 export type VisitStage =
   | 'registered'
   | 'triaged'
   | 'with_doctor'
   | 'in_lab'
+  | 'in_radiology'
+  | 'in_diagnostics'
+  | 'results_review'
   | 'at_pharmacy'
   | 'in_billing'
+  | 'admitted'
   | 'completed'
   | 'cancelled';
 
@@ -55,6 +71,9 @@ export const ACTIVE_VISIT_STAGES: readonly VisitStage[] = [
   'triaged',
   'with_doctor',
   'in_lab',
+  'in_radiology',
+  'in_diagnostics',
+  'results_review',
   'at_pharmacy',
   'in_billing',
 ];
@@ -65,8 +84,12 @@ export const VISIT_STAGE_SEQUENCE: readonly VisitStage[] = [
   'triaged',
   'with_doctor',
   'in_lab',
+  'in_radiology',
+  'in_diagnostics',
+  'results_review',
   'at_pharmacy',
   'in_billing',
+  'admitted',
   'completed',
 ];
 
@@ -74,6 +97,7 @@ export type BillingType = 'cash' | 'insurance' | 'corporate';
 export type BillingCategory =
   | 'consultation'
   | 'laboratory'
+  | 'radiology'
   | 'pharmacy'
   | 'procedure'
   | 'accommodation';
@@ -125,6 +149,18 @@ export interface PatientVisit {
   triage_notes?: string | null;
   triaged_at?: string | null;
   triaged_by?: string | null;
+  queue_token?: string | null;
+  acuity_level?: AcuityLevel | null;
+  meeting_url?: string | null;
+  telemedicine_status?: TelemedicineStatus | null;
+  telemedicine_started_at?: string | null;
+  telemedicine_ended_at?: string | null;
+  telemedicine_notes?: string | null;
+  has_pending_lab?: boolean | null;
+  has_pending_radiology?: boolean | null;
+  has_pending_procedure?: boolean | null;
+  results_ready_for_review?: boolean | null;
+  results_ready_at?: string | null;
   completed_at?: string | null;
   invoice_id?: string | null;
   created_at?: string;
@@ -392,8 +428,19 @@ export function nextVisitStage(stage: VisitStage): VisitStage | null {
 
 export interface BillBuildInput {
   consultationFee?: number;
+  /** Nursing triage / acuity assessment. Zero by default (no separate tariff). */
+  triageFee?: number;
   labItems?: ReadonlyArray<{
     test_name: string;
+    unit_price?: number | string | null;
+  }>;
+  radiologyItems?: ReadonlyArray<{
+    procedure_name: string;
+    modality?: string | null;
+    unit_price?: number | string | null;
+  }>;
+  procedureItems?: ReadonlyArray<{
+    procedure_name: string;
     unit_price?: number | string | null;
   }>;
   prescriptionItems?: ReadonlyArray<{
@@ -422,11 +469,45 @@ export function buildBillItems(input: BillBuildInput): BillItem[] {
     total: consultationFee,
   });
 
+  const triageFee = roundMoney(toNumber(input.triageFee ?? 0));
+  if (triageFee > 0) {
+    items.push({
+      description: 'Nursing Triage & Acuity Assessment',
+      category: 'consultation',
+      quantity: 1,
+      unitPrice: triageFee,
+      total: triageFee,
+    });
+  }
+
   for (const lab of input.labItems ?? []) {
     const price = roundMoney(toNumber(lab.unit_price));
     items.push({
       description: `Lab Test: ${lab.test_name}`,
       category: 'laboratory',
+      quantity: 1,
+      unitPrice: price,
+      total: price,
+    });
+  }
+
+  for (const scan of input.radiologyItems ?? []) {
+    const price = roundMoney(toNumber(scan.unit_price));
+    const modality = scan.modality ? ` (${scan.modality.toUpperCase()})` : '';
+    items.push({
+      description: `Imaging: ${scan.procedure_name}${modality}`,
+      category: 'radiology',
+      quantity: 1,
+      unitPrice: price,
+      total: price,
+    });
+  }
+
+  for (const procedure of input.procedureItems ?? []) {
+    const price = roundMoney(toNumber(procedure.unit_price));
+    items.push({
+      description: `Procedure: ${procedure.procedure_name}`,
+      category: 'procedure',
       quantity: 1,
       unitPrice: price,
       total: price,
@@ -594,16 +675,30 @@ export async function checkInPatientVisit(
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const visitNumber = await generateNextVisitNumber(businessId, now);
+    const visitDate = now.toISOString().slice(0, 10);
+    const [visitNumber, tokenResult] = await Promise.all([
+      generateNextVisitNumber(businessId, now),
+      db
+        .from('patient_visits')
+        .select('queue_token')
+        .eq('business_id', businessId)
+        .eq('visit_date', visitDate)
+        .not('queue_token', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(200),
+    ]);
+    if (tokenResult.error) throw tokenResult.error;
+
     const { data, error } = await db
       .from('patient_visits')
       .insert({
         business_id: businessId,
         patient_id: patientId,
         visit_number: visitNumber,
-        visit_date: now.toISOString().slice(0, 10),
+        visit_date: visitDate,
         visit_type: visitType,
         stage: 'registered',
+        queue_token: nextQueueToken(tokenResult.data),
       })
       .select('*, patient:patients(*)')
       .single();
@@ -1047,28 +1142,74 @@ export async function getPatientVisitBill(visitId: string): Promise<PatientBillS
   const typedVisit = visit as unknown as PatientVisit;
   const patient = typedVisit.patient ?? null;
 
-  const [{ data: labOrders, error: labError }, { data: prescriptions, error: rxError }] =
-    await Promise.all([
-      db
-        .from('lab_orders')
-        .select('id, status, items:lab_order_items(*)')
-        .eq('visit_id', visitId)
-        .neq('status', 'cancelled'),
-      db
-        .from('prescriptions')
-        .select('id, status, items:prescription_items(*)')
-        .eq('visit_id', visitId)
-        .neq('status', 'cancelled'),
-    ]);
+  const [
+    { data: labOrders, error: labError },
+    { data: prescriptions, error: rxError },
+    { data: radiologyOrders, error: radiologyError },
+    { data: procedureOrders, error: procedureError },
+  ] = await Promise.all([
+    db
+      .from('lab_orders')
+      .select('id, status, items:lab_order_items(*)')
+      .eq('visit_id', visitId)
+      .neq('status', 'cancelled'),
+    db
+      .from('prescriptions')
+      .select('id, status, items:prescription_items(*)')
+      .eq('visit_id', visitId)
+      .neq('status', 'cancelled'),
+    db
+      .from('radiology_orders')
+      .select('id, status, items:radiology_order_items(*)')
+      .eq('visit_id', visitId)
+      .neq('status', 'cancelled'),
+    db
+      .from('clinical_procedure_orders')
+      .select('*')
+      .eq('visit_id', visitId)
+      .neq('status', 'cancelled'),
+  ]);
 
   if (labError) throw labError;
   if (rxError) throw rxError;
+  if (radiologyError) throw radiologyError;
+  if (procedureError) throw procedureError;
 
   const labItems = ((labOrders ?? []) as Array<{ items?: LabOrderItemRecord[] }>).flatMap(
     (order) => order.items ?? [],
   );
   const prescriptionItems = ((prescriptions ?? []) as Array<{ items?: PrescriptionItemRecord[] }>).flatMap(
     (rx) => rx.items ?? [],
+  );
+  const radiologyItems = (
+    (radiologyOrders ?? []) as Array<{
+      items?: Array<{
+        procedure_name?: string;
+        modality?: string;
+        unit_price?: number | string | null;
+        status?: string;
+      }>;
+    }>
+  )
+    .flatMap((order) =>
+      (order.items ?? []).filter((item) => item.status !== 'cancelled'),
+    )
+    .filter(
+      (
+        item,
+      ): item is {
+        procedure_name: string;
+        modality?: string;
+        unit_price?: number | string | null;
+        status?: string;
+      } => Boolean(item.procedure_name),
+    );
+  const procedureItems = ((procedureOrders ?? []) as Array<{
+    procedure_name?: string;
+    unit_price?: number | string | null;
+  }>).filter(
+    (procedure): procedure is { procedure_name: string; unit_price?: number | string | null } =>
+      Boolean(procedure.procedure_name),
   );
 
   // Inpatient bed-stay lines are computed from the admission's allocation
@@ -1077,6 +1218,8 @@ export async function getPatientVisitBill(visitId: string): Promise<PatientBillS
   const items = buildBillItems({
     consultationFee: CONSULTATION_FEE,
     labItems,
+    radiologyItems,
+    procedureItems,
     prescriptionItems,
     bedStayItems: toAccommodationBillItems(bedStayCharges),
   });

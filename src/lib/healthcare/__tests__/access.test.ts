@@ -71,7 +71,10 @@ describe('healthcare vertical boundary', () => {
     expect(paths).toEqual([
       '/healthcare',
       '/healthcare/patients',
+      '/healthcare/triage',
       '/healthcare/consultation',
+      '/healthcare/telemedicine',
+      '/healthcare/radiology',
       '/healthcare/billing',
       '/healthcare/pharmacy',
       '/healthcare/wards',
@@ -85,7 +88,7 @@ describe('healthcare vertical boundary', () => {
 
   it('keeps the Enterprise upsell path for a healthcare business below Enterprise', () => {
     const items = healthcarePaths(['HEALTHCARE'], 'growth');
-    expect(items).toHaveLength(10);
+    expect(items).toHaveLength(13);
     expect(items.every((item) => item.locked === true)).toBe(true);
   });
 });

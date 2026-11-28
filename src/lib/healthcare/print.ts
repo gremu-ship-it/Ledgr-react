@@ -12,6 +12,7 @@ import type {
   DoctorPayoutVoucherData,
   LabReportData,
   MedicationLabelFormat,
+  RadiologyReportData,
 } from '@/types/healthcare';
 
 export function escapeHtml(value: unknown): string {
@@ -494,6 +495,83 @@ export function buildDoctorPayoutVoucherHtml(data: DoctorPayoutVoucherData): str
       <span>${escapeHtml(data.labels.voucherNumber)}: ${escapeHtml(data.voucherNumber)}</span>
       <span>${escapeHtml(data.labels.footer)}</span>
     </footer>
+  </body>
+</html>`;
+}
+
+/** A4 radiology / imaging report, printed through the same sandboxed iframe. */
+export function buildRadiologyReportHtml(data: RadiologyReportData): string {
+  const images = (data.imageUrls ?? []).filter(Boolean);
+  return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${escapeHtml(data.labels.title)} — ${escapeHtml(data.orderNumber)}</title>
+    <style>
+      @page { size: A4; margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #111827; font-size: 12px; line-height: 1.5; }
+      header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 14px; }
+      h1 { font-size: 19px; margin: 0 0 4px; letter-spacing: .2px; }
+      .brand { font-size: 15px; font-weight: 700; }
+      .muted { color: #6b7280; font-size: 11px; }
+      .order { text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin: 12px 0 18px; }
+      .row { display: flex; gap: 8px; border-bottom: 1px solid #e5e7eb; padding: 4px 0; }
+      .row dt { color: #6b7280; min-width: 116px; margin: 0; }
+      .row dd { margin: 0; font-weight: 600; }
+      h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .9px; color: #374151; margin: 16px 0 6px; }
+      .box { border: 1px solid #d1d5db; border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; min-height: 64px; }
+      .impression { background: #f8fafc; border-left: 4px solid #0f172a; }
+      .images img { max-width: 100%; max-height: 230px; border: 1px solid #d1d5db; border-radius: 4px; margin: 0 8px 8px 0; }
+      footer { margin-top: 28px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+      .signature { border-top: 1px solid #111827; padding-top: 4px; min-width: 220px; }
+      .disclaimer { margin-top: 18px; color: #6b7280; font-size: 9.5px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <div class="brand">${escapeHtml(data.businessName)}</div>
+        <h1>${escapeHtml(data.labels.title)}</h1>
+        <div class="muted">${escapeHtml(data.labels.procedure)}: ${escapeHtml(data.procedureName)}</div>
+      </div>
+      <div class="order">${escapeHtml(data.orderNumber)}</div>
+    </header>
+
+    <dl class="grid">
+      <div class="row"><dt>${escapeHtml(data.labels.patient)}</dt><dd>${escapeHtml(data.patientName)}</dd></div>
+      <div class="row"><dt>${escapeHtml(data.labels.mrn)}</dt><dd>${escapeHtml(data.mrn)}</dd></div>
+      <div class="row"><dt>${escapeHtml(data.labels.modality)}</dt><dd>${escapeHtml(String(data.modality).toUpperCase())}</dd></div>
+      <div class="row"><dt>${escapeHtml(data.labels.bodySite)}</dt><dd>${escapeHtml(data.bodySite ?? '—')}</dd></div>
+      <div class="row"><dt>${escapeHtml(data.labels.performedAt)}</dt><dd>${escapeHtml(data.performedAt ?? '—')}</dd></div>
+      <div class="row"><dt>${escapeHtml(data.labels.reportedAt)}</dt><dd>${escapeHtml(data.reportedAt ?? '—')}</dd></div>
+    </dl>
+
+    <h2>${escapeHtml(data.labels.indication)}</h2>
+    <div class="box">${escapeHtml(data.clinicalIndication ?? '—')}</div>
+
+    <h2>${escapeHtml(data.labels.findings)}</h2>
+    <div class="box">${escapeHtml(data.findings)}</div>
+
+    <h2>${escapeHtml(data.labels.impression)}</h2>
+    <div class="box impression">${escapeHtml(data.impression)}</div>
+
+    ${data.recommendations ? `<h2>${escapeHtml(data.labels.recommendations)}</h2><div class="box">${escapeHtml(data.recommendations)}</div>` : ''}
+
+    ${images.length ? `<h2>${escapeHtml(data.labels.images)}</h2><div class="images">${images.map((url) => `<img src="${escapeHtml(url)}" alt="" />`).join('')}</div>` : ''}
+
+    <footer>
+      <div class="signature">
+        <div>${escapeHtml(data.radiologist ?? '')}</div>
+        <div class="muted">${escapeHtml(data.labels.radiologist)}</div>
+      </div>
+      <div class="signature">
+        <div>${escapeHtml(data.technician ?? '')}</div>
+        <div class="muted">${escapeHtml(data.labels.technician)}</div>
+      </div>
+    </footer>
+    <div class="disclaimer">${escapeHtml(data.labels.disclaimer)}</div>
   </body>
 </html>`;
 }

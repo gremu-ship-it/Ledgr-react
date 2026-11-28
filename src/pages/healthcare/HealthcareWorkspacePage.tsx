@@ -7,12 +7,15 @@ import {
   BedDouble,
   ClipboardList,
   Clock3,
+  HeartPulse,
   Plus,
   Receipt,
   RefreshCw,
+  ScanLine,
   Stethoscope,
   UserPlus,
   UsersRound,
+  Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import {
@@ -230,6 +233,18 @@ export function HealthcareWorkspacePage() {
           <Button variant="secondary" size="sm" onClick={() => openConsultation(selectedVisit?.id)}>
             <ClipboardList className="h-3.5 w-3.5" aria-hidden />
             {t('healthcare.workspace.newConsultation')}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate('/healthcare/triage')}>
+            <HeartPulse className="h-3.5 w-3.5" aria-hidden />
+            {t('nav.nurseTriage')}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate('/healthcare/radiology')}>
+            <ScanLine className="h-3.5 w-3.5" aria-hidden />
+            {t('nav.radiologyStation')}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate('/healthcare/telemedicine')}>
+            <Video className="h-3.5 w-3.5" aria-hidden />
+            {t('nav.telemedicine')}
           </Button>
           <Button variant="secondary" size="sm" onClick={() => openBilling(selectedVisit?.id)}>
             <Receipt className="h-3.5 w-3.5" aria-hidden />

@@ -22,6 +22,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { checkAndTriggerResultsReview } from '@/services/clinicalFlowService';
 import type {
   CollectSpecimenInput,
   LabOrder,
@@ -529,12 +530,16 @@ export async function verifyLabOrder(
 
   const visitId = (order as { visit_id?: string }).visit_id;
   if (visitId) {
+    // The lab track is done, but imaging may still be open. Park the visit in
+    // diagnostics and let the loop-back check decide whether it returns to the
+    // doctor now or after the radiology order is signed off.
     await db
       .from('patient_visits')
-      .update({ stage: 'with_doctor' })
+      .update({ stage: 'in_diagnostics' })
       .eq('id', visitId)
       .eq('business_id', businessId)
       .eq('stage', 'in_lab');
+    await checkAndTriggerResultsReview(visitId, businessId, { labAlreadyComplete: true });
   }
 
   const refreshed = await getLabOrder(businessId, labOrderId);
