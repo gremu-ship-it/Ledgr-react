@@ -7,6 +7,7 @@ import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/Pr
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { WorkspaceTabRedirect } from '@/components/layout/WorkspaceTabRedirect';
 import { InstallPrompt } from '@/offline/InstallPrompt';
 import {
   activateServiceWorkerUpdate,
@@ -976,16 +977,18 @@ function App() {
                   />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
-                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
-                      <PlanGate minPlan="starter" featureNameKey="pos.pointOfSale">
-                        <CapabilityGate capability="pos">
-                          <PosPage />
-                        </CapabilityGate>
-                      </PlanGate>
-                    </OperatingModelGate>
+                    <WorkspaceTabRedirect basePath="/pos">
+                      <OperatingModelGate requiredOperatingModels={['RETAIL', 'HEALTHCARE']} redirectTo="/income">
+                        <PlanGate minPlan="starter" featureNameKey="pos.pointOfSale">
+                          <CapabilityGate capability="pos">
+                            <PosPage />
+                          </CapabilityGate>
+                        </PlanGate>
+                      </OperatingModelGate>
+                    </WorkspaceTabRedirect>
                   } />
                   <Route path="/pos/registers" element={
-                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                    <OperatingModelGate requiredOperatingModels={['RETAIL', 'HEALTHCARE']} redirectTo="/income">
                       <PlanGate minPlan="starter" featureNameKey="pos.registers">
                         <CapabilityGate capability="pos" rolePath="/pos/registers">
                           <PosRegistersPage />
@@ -994,7 +997,7 @@ function App() {
                     </OperatingModelGate>
                   } />
                   <Route path="/pos/shifts" element={
-                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                    <OperatingModelGate requiredOperatingModels={['RETAIL', 'HEALTHCARE']} redirectTo="/income">
                       <PlanGate minPlan="growth" featureNameKey="pos.shiftHistory">
                         <CapabilityGate capability="pos" rolePath="/pos/shifts">
                           <PosShiftsPage />
@@ -1042,7 +1045,10 @@ function App() {
                       <SectionErrorBoundary sectionName="Payroll leave requests" fallbackHeight="360px"><LeaveRequestsPage /></SectionErrorBoundary>
                     </PartnerPlanGate>
                   } />
-                  <Route path="/payroll" element={<Navigate to="/payroll/employees" replace />} />
+                  <Route
+                    path="/payroll"
+                    element={<WorkspaceTabRedirect basePath="/payroll" fallback="/payroll/employees" />}
+                  />
                   <Route path="/payroll/tax-config" element={
                     <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.taxConfig')}>
                       <SectionErrorBoundary sectionName="Payroll tax configuration" fallbackHeight="360px"><TaxConfigPage /></SectionErrorBoundary>
@@ -1241,11 +1247,23 @@ function App() {
                 department-facing labels and canonical module paths; these
                 redirects keep every link live without moving the existing
                 routes. */}
-            <Route path="/banking" element={<Navigate to="/bank-reconciliation/accounts" replace />} />
-            <Route path="/taxation" element={<Navigate to="/tax" replace />} />
-            <Route path="/accounting" element={<Navigate to="/accounts" replace />} />
+            <Route
+              path="/banking"
+              element={<WorkspaceTabRedirect basePath="/banking" fallback="/bank-reconciliation/accounts" />}
+            />
+            <Route
+              path="/taxation"
+              element={<WorkspaceTabRedirect basePath="/taxation" fallback="/tax" />}
+            />
+            <Route
+              path="/accounting"
+              element={<WorkspaceTabRedirect basePath="/accounting" fallback="/accounts" />}
+            />
             <Route path="/inventory" element={<Navigate to="/products" replace />} />
-            <Route path="/reports" element={<Navigate to="/reports/trial-balance" replace />} />
+            <Route
+              path="/reports"
+              element={<WorkspaceTabRedirect basePath="/reports" fallback="/reports/trial-balance" />}
+            />
             <Route path="/budgets" element={<Navigate to="/reports/budgets" replace />} />
             <Route path="/audit-logs" element={<Navigate to="/audit" replace />} />
             <Route path="/organization" element={<Navigate to="/departments" replace />} />

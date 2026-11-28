@@ -140,7 +140,7 @@ export function BottomNav() {
   // not yet known we keep the (plan-filtered) default list. Memoized because
   // the item lists below derive from it.
   const allowedForRole = useCallback(
-    (path: string) => !role || isPathAllowedForRole(role, path),
+    (path: string) => !role || isPathAllowedForRole(role, path.split('?')[0]),
     [role],
   );
 
@@ -165,10 +165,13 @@ export function BottomNav() {
       : homeIsPos && posNavItem
         ? [posNavItem, ...BOTTOM_NAV_ITEMS]
         : BOTTOM_NAV_ITEMS;
-    const primaryItems = sourcePrimaryItems.map((item) => ({
-      ...item,
-      labelKey: navLabelFor(item.labelKey),
-    }));
+    const primaryItems = sourcePrimaryItems
+      .filter((item) => Boolean(item.path))
+      .map((item) => ({
+        ...item,
+        path: item.path!,
+        labelKey: navLabelFor(item.labelKey),
+      }));
     const sourceMoreItems: Array<{
       labelKey: string;
       path: string;
@@ -178,13 +181,22 @@ export function BottomNav() {
     }> = isClinicalWorkspace
       ? clinicalNavigation
           .flatMap((section) => section.items)
+          .flatMap((item) => item.children?.length
+            ? item.children.map((child) => ({
+                labelKey: child.labelKey,
+                path: child.path,
+                icon: navIcon(child.icon ?? item.icon),
+                tone: 'brand' as IconTone,
+              }))
+            : item.path
+              ? [{
+                  labelKey: item.labelKey,
+                  path: item.path,
+                  icon: navIcon(item.icon),
+                  tone: 'brand' as IconTone,
+                }]
+              : [])
           .filter((item) => !CLINICAL_BOTTOM_NAV_ITEMS.some((tab) => tab.path === item.path))
-          .map((item) => ({
-            labelKey: item.labelKey,
-            path: item.path,
-            icon: navIcon(item.icon),
-            tone: 'brand' as IconTone,
-          }))
       : ALL_MORE_MENU_ITEMS;
 
     return {

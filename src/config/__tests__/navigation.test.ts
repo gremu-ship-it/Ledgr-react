@@ -1,7 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { buildNavigation, usesClinicalNavigation } from '../navigation';
+import {
+  buildNavigation,
+  isNavigationItemActive,
+  isNavigationPathActive,
+  navigationPaths,
+  resolveNavigationTarget,
+  usesClinicalNavigation,
+  type NavItem,
+  type NavSection,
+} from '../navigation';
 import { getDefaultLandingPath } from '../../utils/workspaceRouting';
 
 const en = JSON.parse(
@@ -30,8 +39,24 @@ function declaredRoutePatterns(): RegExp[] {
   });
 }
 
-function allPaths(nav: ReturnType<typeof buildNavigation>): string[] {
-  return nav.flatMap((section) => section.items.map((item) => item.path));
+function allPaths(nav: readonly NavSection[]): string[] {
+  return navigationPaths(nav);
+}
+
+function allItems(nav: readonly NavSection[]): NavItem[] {
+  return nav.flatMap((section) =>
+    section.items.flatMap((item) => [item, ...(item.children ?? []).map((child) => ({
+      key: child.key,
+      labelKey: child.labelKey,
+      defaultLabel: child.defaultLabel,
+      path: child.path,
+      icon: child.icon ?? item.icon,
+    }))]),
+  );
+}
+
+function itemByKey(nav: readonly NavSection[], key: string): NavItem | undefined {
+  return allItems(nav).find((item) => item.key === key);
 }
 
 describe('Healthcare navigation & workspace architecture', () => {
@@ -71,9 +96,10 @@ describe('Healthcare navigation & workspace architecture', () => {
     const items = buildNavigation({
       subscriptionPlan: 'enterprise',
       operatingModels: ['HEALTHCARE'],
-    }).flatMap((section) => section.items);
+    }).flatMap((section) => section.items)
+      .filter((item) => Boolean(item.path));
 
-    const byPath = new Map(items.map((item) => [item.path, item]));
+    const byPath = new Map(items.map((item) => [item.path!, item]));
     expect(byPath.get('/assets')).toMatchObject({
       labelKey: 'nav.medicalEquipment',
       defaultLabel: 'Medical Equipment & Assets',
@@ -144,6 +170,98 @@ describe('Healthcare navigation & workspace architecture', () => {
     })).toBe(false);
   });
 
+  it('restores operational depth as nested accordion children', () => {
+    const nav = buildNavigation({
+      subscriptionPlan: 'enterprise',
+      operatingModels: ['HEALTHCARE'],
+    });
+    const byKey = (key: string) => itemByKey(nav, key);
+
+    expect(byKey('patient_billing_pos')).toMatchObject({
+      labelKey: 'nav.patientBilling',
+      children: [
+        { key: 'patient_invoices', path: '/healthcare/billing' },
+        { key: 'pos_terminal', path: '/pos' },
+        { key: 'cash_drawer_shifts', path: '/pos?tab=shifts' },
+      ],
+    });
+    expect(byKey('staff_payroll')).toMatchObject({
+      labelKey: 'nav.staffPayroll',
+      children: [
+        { key: 'payroll_employees', path: '/payroll' },
+        { key: 'payroll_payruns', path: '/payroll?tab=payruns' },
+        { key: 'payroll_leave', path: '/payroll?tab=leave' },
+      ],
+    });
+    expect(byKey('banking_pos_clearing')?.children?.map((child) => child.path)).toEqual([
+      '/banking', '/banking?tab=statements', '/banking?tab=reconcile',
+      '/banking?tab=deposits', '/banking?tab=currencies',
+    ]);
+    expect(byKey('general_ledger')?.children?.map((child) => child.path)).toEqual([
+      '/accounting', '/accounting?tab=journals', '/accounting?tab=periods',
+    ]);
+    expect(byKey('taxation_statutory')?.children?.map((child) => child.path)).toEqual([
+      '/taxation', '/taxation?tab=vat', '/taxation?tab=wht',
+    ]);
+    expect(byKey('financial_reports')?.children?.map((child) => child.path)).toEqual([
+      '/reports', '/reports?tab=revenue', '/reports?tab=equity', '/reports?tab=branches',
+    ]);
+
+    // Accordion parents toggle state; they must not act as dead links.
+    for (const parent of ['patient_billing_pos', 'staff_payroll', 'banking_pos_clearing', 'general_ledger', 'taxation_statutory', 'financial_reports']) {
+      expect(byKey(parent)?.path).toBeUndefined();
+      expect(byKey(parent)?.children?.length).toBeGreaterThan(0);
+    }
+
+    const subKeys = allItems(nav).filter((item) => item.labelKey.startsWith('nav.sub.')).map((item) => item.key);
+    expect(new Set(subKeys).size).toBe(21);
+    expect(subKeys).toEqual(expect.arrayContaining([
+      'patient_invoices', 'pos_terminal', 'cash_drawer_shifts',
+      'payroll_employees', 'payroll_payruns', 'payroll_leave',
+      'banking_accounts', 'banking_statements', 'banking_reconciliation',
+      'banking_deposits', 'banking_exchange_rates',
+      'gl_accounts', 'gl_journals', 'gl_periods',
+      'tax_overview', 'tax_vat', 'tax_wht',
+      'rep_statements', 'rep_revenue', 'rep_equity', 'rep_branches',
+    ]));
+  });
+
+  it('gives the standard ERP fallback the same operational sub-menus', () => {
+    const nav = buildNavigation({
+      subscriptionPlan: 'pro',
+      operatingModels: ['PRODUCT_SALES'],
+    });
+    expect(itemByKey(nav, 'payroll')?.children).toHaveLength(3);
+    expect(itemByKey(nav, 'banking')?.children).toHaveLength(5);
+    expect(itemByKey(nav, 'accounting')?.children).toHaveLength(3);
+    expect(itemByKey(nav, 'taxation')?.children).toHaveLength(3);
+    expect(itemByKey(nav, 'reports')?.children).toHaveLength(4);
+    expect(itemByKey(nav, 'patient_billing_pos')).toBeUndefined();
+  });
+
+  it('matches child destinations by canonical path and by exact query', () => {
+    expect(isNavigationPathActive('/payroll?tab=leave', '/payroll', '?tab=leave')).toBe(true);
+    expect(isNavigationPathActive('/payroll?tab=leave', '/payroll/leave', '')).toBe(true);
+    expect(isNavigationPathActive('/payroll?tab=leave', '/payroll/pay-runs', '')).toBe(false);
+    expect(isNavigationPathActive('/banking?tab=reconcile', '/bank-reconciliation/reconcile', '')).toBe(true);
+    expect(isNavigationPathActive('/reports?tab=revenue', '/reports/revenue-breakdown', '')).toBe(true);
+    expect(isNavigationPathActive('/pos?tab=shifts', '/pos/shifts', '')).toBe(true);
+    expect(isNavigationPathActive('/healthcare/billing', '/healthcare/billing', '?tab=anything')).toBe(false);
+    expect(resolveNavigationTarget('/payroll?tab=payruns')).toBe('/payroll/pay-runs');
+  });
+
+  it('marks a parent active when a nested child is the current route', () => {
+    const nav = buildNavigation({
+      subscriptionPlan: 'enterprise',
+      operatingModels: ['HEALTHCARE'],
+    });
+    expect(isNavigationItemActive(itemByKey(nav, 'staff_payroll')!, '/payroll/leave')).toBe(true);
+    expect(isNavigationItemActive(itemByKey(nav, 'banking_pos_clearing')!, '/cash-deposits')).toBe(true);
+    expect(isNavigationItemActive(itemByKey(nav, 'financial_reports')!, '/reports/trial-balance')).toBe(true);
+    expect(isNavigationItemActive(itemByKey(nav, 'taxation_statutory')!, '/tax')).toBe(true);
+    expect(isNavigationItemActive(itemByKey(nav, 'staff_payroll')!, '/healthcare')).toBe(false);
+  });
+
   it('sources every navigation group and item label from en.json', () => {
     const nav = [
       ...buildNavigation({ subscriptionPlan: 'enterprise', operatingModels: ['HEALTHCARE'] }),
@@ -151,7 +269,7 @@ describe('Healthcare navigation & workspace architecture', () => {
     ];
     for (const section of nav) {
       expect(typeof lookup(section.titleKey), section.titleKey).toBe('string');
-      for (const item of section.items) {
+      for (const item of allItems([section])) {
         expect(typeof lookup(item.labelKey), item.labelKey).toBe('string');
       }
     }

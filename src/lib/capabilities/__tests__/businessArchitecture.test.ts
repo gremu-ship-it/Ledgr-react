@@ -30,7 +30,7 @@ function visiblePaths(isOrgEnabled: (capability: OrganisationCapability) => bool
 }
 
 describe('frozen Phase 1 capability acceptance matrix', () => {
-  it('A — preserves core navigation while a POS override cannot bypass the RETAIL model gate', () => {
+  it('A — preserves core navigation while a POS override cannot bypass the model gate', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
     expect(resolveBusinessCapability('pos', pinnedExisting, fullAccess)).toBe(true);
     expect(resolveBusinessCapability('inventory', pinnedExisting, fullAccess)).toBe(true);
@@ -44,9 +44,25 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
 
     const app = readFileSync(fileURLToPath(new URL('../../../../src/App.tsx', import.meta.url)), 'utf8');
     const posRoute = app.match(/<Route path="\/pos" element=\{[\s\S]*?<\/OperatingModelGate>\s*\} \/>/);
-    expect(posRoute?.[0]).toContain(`<OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">`);
+    // The clinical workspace gets the same till for patient billing, but no
+    // other vertical can reach it through a capability override.
+    expect(posRoute?.[0]).toContain(`<OperatingModelGate requiredOperatingModels={['RETAIL', 'HEALTHCARE']} redirectTo="/income">`);
     expect(posRoute?.[0]).toContain('<CapabilityGate capability="pos">');
     expect(posRoute?.[0]).toContain('<PosPage />');
+  });
+
+  it('defaults the healthcare profile to patient-billing POS', () => {
+    expect(deriveOrganisationCapabilityDefaults({
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['HEALTHCARE'],
+    })).toMatchObject({
+      sales: true,
+      pos: true,
+      inventory: false,
+      services: true,
+      construction: false,
+      manufacturing: false,
+    });
   });
 
   it('B — preserves a legacy non-POS business regardless of its prior usage signals', () => {

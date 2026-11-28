@@ -91,9 +91,10 @@ const MODEL_CAPABILITIES: Readonly<Record<OperatingModel, readonly OrganisationC
   // contracted work.
   MANUFACTURING: ['sales', 'inventory', 'manufacturing'],
   // A clinic sells clinical services and dispenses products from its pharmacy
-  // catalogue. POS stays off: the healthcare till is the patient billing
-  // screen, which raises an AR invoice rather than a retail receipt.
-  HEALTHCARE: ['sales', 'services'],
+  // catalogue. The clinical shell also exposes a patient-billing POS terminal
+  // and cash-drawer shifts, so the till capability is part of the default
+  // healthcare profile rather than an optional retail override.
+  HEALTHCARE: ['sales', 'services', 'pos'],
 };
 
 /**

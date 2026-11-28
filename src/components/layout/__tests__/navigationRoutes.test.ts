@@ -17,7 +17,8 @@ function routePatterns(): RegExp[] {
 
 describe('navigation route contracts', () => {
   it('points every desktop sidebar item at a declared application route', () => {
-    const paths = NAV_SECTIONS.flatMap((section) => section.items.map(({ path: itemPath }) => itemPath));
+    const paths = NAV_SECTIONS.flatMap((section) => section.items.map(({ path: itemPath }) => itemPath))
+      .filter((itemPath): itemPath is string => Boolean(itemPath));
     const routes = routePatterns();
     const unresolved = paths.filter((itemPath) => {
       const pathname = itemPath.split('?')[0];
@@ -27,12 +28,13 @@ describe('navigation route contracts', () => {
   });
 
   it('redirects legacy /payroll and /chat URLs to their canonical surfaces', () => {
-    expect(appSource).toContain('<Route path="/payroll" element={<Navigate to="/payroll/employees" replace />} />');
+    expect(appSource).toContain('basePath="/payroll" fallback="/payroll/employees"');
     expect(appSource).toMatch(/<Route path="\/chat" element=\{<Navigate to="\/ai" replace \/>\} \/>/);
   });
 
   it('keeps the Settings entry in the account menu and out of duplicate sidebar routes', () => {
-    const paths = NAV_SECTIONS.flatMap((section) => section.items.map(({ path: itemPath }) => itemPath));
+    const paths = NAV_SECTIONS.flatMap((section) => section.items.map(({ path: itemPath }) => itemPath))
+      .filter((itemPath): itemPath is string => Boolean(itemPath));
     expect(paths).not.toContain('/settings');
     expect(paths.filter((itemPath) => itemPath === '/settings/exchange-rates')).toHaveLength(1);
     expect(headerSource).toContain("navigate('/settings');");

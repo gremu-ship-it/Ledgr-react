@@ -53,10 +53,19 @@ import type { PartnerFeatureKey } from '@/types/partners';
 import type { OperatingModel, OrganisationCapability } from '@/lib/capabilities/profile';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
-export interface NavItemConfig {
+export interface NavSubItemConfig {
   labelKey: string;
   path: string;
   icon: LucideIcon;
+}
+
+export interface NavItemConfig {
+  labelKey: string;
+  /** Leaf destination; operational accordion parents are pathless. */
+  path?: string;
+  icon: LucideIcon;
+  /** Operational sub-menu rendered as a collapsible accordion. */
+  children?: NavSubItemConfig[];
   requiresCapability?: PlanCapability;
   minPlan?: PlanTier;
   partnerFeature?: PartnerFeatureKey;
@@ -625,7 +634,10 @@ export function visibleSectionsFor(
         if (item.requiresOrgCapability && !isOrgCapabilityEnabled(item.requiresOrgCapability)) return false;
         if (item.hiddenWhenSitesReplaceBranches && sitesReplaceBranches) return false;
         if (item.partnerFeature && !isFeatureEnabled(item.partnerFeature)) return false;
-        if (role && !item.allowAllAuthenticatedRoles && !isPathAllowedForRole(role, item.path.split('?')[0])) return false;
+        if (role && !item.allowAllAuthenticatedRoles) {
+          if (!item.path) return (item.children ?? []).some((child) => isPathAllowedForRole(role, child.path.split('?')[0]));
+          if (!isPathAllowedForRole(role, item.path.split('?')[0])) return false;
+        }
         return true;
       });
 
@@ -656,8 +668,8 @@ export function visibleSectionsFor(
 export const GATED_PATHS: Set<string> = new Set(
   NAV_SECTIONS.flatMap((s) =>
     s.items
-      .filter((i) => i.minPlan || i.requiresCapability || i.requiresOrgCapability || i.requiredOperatingModels)
-      .map((i) => i.path)
+      .filter((i) => i.path && (i.minPlan || i.requiresCapability || i.requiresOrgCapability || i.requiredOperatingModels))
+      .map((i) => i.path!)
   ),
 );
 

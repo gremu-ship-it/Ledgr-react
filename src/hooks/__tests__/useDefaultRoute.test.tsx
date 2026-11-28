@@ -257,6 +257,57 @@ describe('CommandPalette clinical command set', () => {
   });
 });
 
+describe('CommandPalette nested clinical destinations', () => {
+  it('indexes every accordion child with its parent context', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    useAppStore.setState({
+      currentBusiness: {
+        role: 'owner',
+        business: {
+          id: '30000000-0000-0000-0000-000000000004',
+          name: 'Nested Clinic',
+          base_currency: 'MWK',
+          organisation_type: 'FOR_PROFIT',
+          operating_models: ['HEALTHCARE'],
+          plan_tier: 'enterprise',
+        },
+      },
+      businesses: [],
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/healthcare']}>
+          <CommandPalette />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    fireEvent(window, new Event('ledgr:open-command-palette'));
+    const input = screen.getByPlaceholderText(/Search patients, clinic pages, or actions/i);
+
+    fireEvent.change(input, { target: { value: 'Leave Requests' } });
+    expect(screen.getAllByText('Staff Payroll › Leave Requests').length).toBeGreaterThan(0);
+
+    fireEvent.change(input, { target: { value: 'Cash Drawer Shifts' } });
+    expect(screen.getAllByText('Patient Billing & POS › Cash Drawer Shifts').length).toBeGreaterThan(0);
+
+    fireEvent.change(input, { target: { value: 'Bank Statements' } });
+    expect(screen.getAllByText('Banking & POS Clearing › Bank Statements').length).toBeGreaterThan(0);
+
+    fireEvent.change(input, { target: { value: 'Period Management' } });
+    expect(screen.getAllByText('General Ledger & Accounts › Period Management').length).toBeGreaterThan(0);
+
+    fireEvent.change(input, { target: { value: 'VAT Returns' } });
+    expect(screen.getAllByText('Taxation & Statutory › VAT Returns').length).toBeGreaterThan(0);
+
+    fireEvent.change(input, { target: { value: 'Branch Performance' } });
+    expect(screen.getAllByText('Financial & Clinic Reports › Branch Performance').length).toBeGreaterThan(0);
+  });
+});
+
 describe('CommandPalette vertical-aware business switch navigation', () => {
   it.each([
     {

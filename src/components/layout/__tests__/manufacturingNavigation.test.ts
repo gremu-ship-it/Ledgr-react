@@ -156,7 +156,7 @@ describe('manufacturing label vocabulary', () => {
     const section = visibleSectionsFor(() => true, role, orgCapabilitiesFor(profile), planTier, profile.operating_models)
       .find((candidate) => candidate.labelKey === 'navigation.sections.inventory');
     return (section?.items ?? [])
-      .filter((item) => ['/products', '/warehouse', '/transfers'].includes(item.path))
+      .filter((item) => Boolean(item.path) && ['/products', '/warehouse', '/transfers'].includes(item.path!))
       .map((item) => ({ labelKey: item.labelKey, label: en.navigation.items[item.labelKey.split('.').pop()!] }));
   }
 
@@ -180,14 +180,14 @@ describe('manufacturing label vocabulary', () => {
   it('overrides the vocabulary only — routes, icons and gates are untouched', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
     const items = navFor(manufacturingBusiness, 'enterprise')
-      .filter((item) => ['/products', '/warehouse', '/transfers'].includes(item.path));
+      .filter((item) => Boolean(item.path) && ['/products', '/warehouse', '/transfers'].includes(item.path!));
 
-    expect(items.map((item) => item.path)).toEqual(['/products', '/warehouse', '/transfers']);
+    expect(items.map((item) => item.path!)).toEqual(['/products', '/warehouse', '/transfers']);
     for (const item of items) {
-      expect(item.requiresOrgCapability).toBe(navItemForPath(item.path)?.requiresOrgCapability);
-      expect(item.requiresCapability).toBe(navItemForPath(item.path)?.requiresCapability);
-      expect(item.partnerFeature).toBe(navItemForPath(item.path)?.partnerFeature);
-      expect(item.icon).toBe(navItemForPath(item.path)?.icon);
+      expect(item.requiresOrgCapability).toBe(navItemForPath(item.path!)?.requiresOrgCapability);
+      expect(item.requiresCapability).toBe(navItemForPath(item.path!)?.requiresCapability);
+      expect(item.partnerFeature).toBe(navItemForPath(item.path!)?.partnerFeature);
+      expect(item.icon).toBe(navItemForPath(item.path!)?.icon);
     }
   });
 

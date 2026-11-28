@@ -1,8 +1,16 @@
 import { Link, NavLink, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { ChevronsLeft, ChevronsRight, X, Lock, Building2, DollarSign } from 'lucide-react';
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import {
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  X,
+  Lock,
+  Building2,
+  DollarSign,
+} from 'lucide-react';
+import { useRef, useState, useCallback, useEffect, useMemo, useId } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import {
@@ -10,9 +18,15 @@ import {
   navLabelResolver,
   planRequiredForItem,
   visibleSectionsFor,
+  type NavItemConfig,
   type NavSectionConfig,
 } from './navConfig';
-import { buildNavigation, resolveNavigationTarget } from '@/config/navigation';
+import {
+  buildNavigation,
+  isNavigationPathActive,
+  resolveNavigationTarget,
+} from '@/config/navigation';
+import type { PlanTier } from '@/lib/billing/plans';
 import { navIcon } from '@/config/navigationIcons';
 import { useDefaultRoute } from '@/hooks/useDefaultRoute';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
@@ -22,9 +36,236 @@ import { useUsage } from '@/hooks/useUsage';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { pushUpgradeRequired } from '@/lib/notifications';
 
-export function Sidebar() {
+interface SidebarNavEntryProps {
+  item: NavItemConfig;
+  sectionMinPlan?: PlanTier;
+  sidebarOpen: boolean;
+  density: string;
+  isClinicalWorkspace: boolean;
+  planTier: PlanTier;
+  businessId?: string;
+  labelKeyFor: (key: string) => string;
+  setSidebarOpen: (open: boolean) => void;
+}
+
+function SidebarNavEntry({
+  item,
+  sectionMinPlan,
+  sidebarOpen,
+  density,
+  isClinicalWorkspace,
+  planTier,
+  businessId,
+  labelKeyFor,
+  setSidebarOpen,
+}: SidebarNavEntryProps) {
   const { t } = useTranslation();
   const location = useLocation();
+  const [expanded, setExpanded] = useState(false);
+  const panelId = useId();
+  const Icon = item.icon;
+  const children = item.children ?? [];
+  const hasChildren = children.length > 0;
+  const locked = item.locked ?? isItemLocked(item, planTier, sectionMinPlan);
+
+  const closeOnMobile = () => {
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  };
+
+  const showUpgrade = () => {
+    pushUpgradeRequired(
+      t(labelKeyFor(item.labelKey)),
+      planRequiredForItem(item, sectionMinPlan)?.name ?? t('navigation.accessibility.higherPlan'),
+      businessId,
+    );
+    closeOnMobile();
+  };
+
+  const childIsActive = hasChildren && children.some((child) =>
+    isNavigationPathActive(child.path, location.pathname, location.search),
+  );
+  const leafIsActive = item.path
+    ? isNavigationPathActive(item.path, location.pathname, location.search)
+    : false;
+  const isItemActive = leafIsActive || childIsActive;
+  // A child route always wins over a manually collapsed parent: landing on a
+  // deep link or a `?tab=` destination re-expands its accordion.
+  const isExpanded = hasChildren && (childIsActive || expanded);
+
+  const handleParentClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    if (locked) {
+      showUpgrade();
+      return;
+    }
+    if (!sidebarOpen) {
+      setSidebarOpen(true);
+      setExpanded(true);
+      return;
+    }
+    setExpanded((value) => !value);
+  };
+
+  return (
+    <li className="group relative">
+      {hasChildren ? (
+        <>
+          <button
+            type="button"
+            onClick={handleParentClick}
+            aria-expanded={isExpanded}
+            aria-controls={panelId}
+            aria-current={childIsActive ? 'true' : undefined}
+            data-active={isItemActive ? 'true' : undefined}
+            className={clsx(
+              'relative flex w-full items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors touch-manipulation',
+              density === 'compact' ? 'py-1.5' : 'py-2.5',
+              isItemActive
+                ? 'bg-brand-50 text-brand-700'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+              !sidebarOpen && 'justify-center',
+              locked && 'opacity-60',
+            )}
+          >
+            {childIsActive && (
+              <span
+                className="absolute inset-y-1.5 start-0 w-0.5 rounded-full bg-brand-500"
+                aria-hidden="true"
+              />
+            )}
+            <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+            {sidebarOpen ? (
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                <span className="truncate">{t(labelKeyFor(item.labelKey))}</span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {locked && (
+                    <Lock
+                      className="h-3.5 w-3.5 text-gray-400"
+                      aria-label={t('navigation.accessibility.upgradeRequired')}
+                    />
+                  )}
+                  <ChevronDown
+                    className={clsx(
+                      'h-4 w-4 text-gray-400 transition-transform duration-200',
+                      !isExpanded && '-rotate-90',
+                    )}
+                    aria-hidden="true"
+                  />
+                </span>
+              </span>
+            ) : null}
+            {!sidebarOpen && locked && (
+              <Lock className="absolute right-1 top-1 h-2.5 w-2.5 text-gray-400" aria-hidden="true" />
+            )}
+          </button>
+
+          {sidebarOpen && isExpanded && (
+            <ul
+              id={panelId}
+              className="ms-5 mt-1 space-y-0.5 border-s border-gray-200 ps-2"
+            >
+              {children.map((child) => {
+                const ChildIcon = child.icon;
+                const childActive = isNavigationPathActive(
+                  child.path,
+                  location.pathname,
+                  location.search,
+                );
+                return (
+                  <li key={`${child.labelKey}:${child.path}`}>
+                    <Link
+                      to={child.path}
+                      onClick={(event) => {
+                        if (locked) {
+                          event.preventDefault();
+                          showUpgrade();
+                          return;
+                        }
+                        closeOnMobile();
+                      }}
+                      aria-current={childActive ? 'page' : undefined}
+                      className={clsx(
+                        'relative flex items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium transition-colors touch-manipulation',
+                        density === 'compact' ? 'py-1.5' : 'py-2',
+                        childActive
+                          ? 'bg-brand-50 text-brand-700'
+                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+                        locked && 'opacity-60',
+                      )}
+                    >
+                      <ChildIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{t(labelKeyFor(child.labelKey))}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {!sidebarOpen && (
+            <div className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-within:block">
+              {t(labelKeyFor(item.labelKey))}
+              {locked ? ` ${t('navigation.accessibility.upgradeSuffix')}` : ''}
+              <div className="absolute right-full top-1/2 h-2 w-2 -translate-y-1/2 translate-x-1/2 rotate-45 bg-gray-900" />
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <NavLink
+            to={item.path ?? '#'}
+            end={isClinicalWorkspace && item.path === '/healthcare'}
+            onClick={(event) => {
+              if (locked) {
+                event.preventDefault();
+                showUpgrade();
+                return;
+              }
+              closeOnMobile();
+            }}
+            aria-current={leafIsActive ? 'page' : undefined}
+            className={clsx(
+              'relative flex items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors touch-manipulation',
+              density === 'compact' ? 'py-1.5' : 'py-2.5',
+              leafIsActive
+                ? 'bg-brand-50 text-brand-700'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+              !sidebarOpen && 'justify-center',
+              locked && 'opacity-60',
+            )}
+          >
+            <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+            {sidebarOpen ? (
+              <span className="flex flex-1 items-center justify-between gap-2 truncate">
+                <span className="truncate">{t(labelKeyFor(item.labelKey))}</span>
+                {locked && (
+                  <Lock
+                    className="h-3.5 w-3.5 shrink-0 text-gray-400"
+                    aria-label={t('navigation.accessibility.upgradeRequired')}
+                  />
+                )}
+              </span>
+            ) : null}
+            {!sidebarOpen && locked && (
+              <Lock className="absolute right-1 top-1 h-2.5 w-2.5 text-gray-400" aria-hidden="true" />
+            )}
+            {leafIsActive && <span className="sr-only"> {t('navigation.accessibility.currentPage')}</span>}
+          </NavLink>
+          {!sidebarOpen && (
+            <div className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-within:block">
+              {t(labelKeyFor(item.labelKey))}
+              {locked ? ` ${t('navigation.accessibility.upgradeSuffix')}` : ''}
+              <div className="absolute right-full top-1/2 h-2 w-2 -translate-y-1/2 translate-x-1/2 rotate-45 bg-gray-900" />
+            </div>
+          )}
+        </>
+      )}
+    </li>
+  );
+}
+
+export function Sidebar() {
+  const { t } = useTranslation();
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const sidebarWidth = useAppStore((s) => s.sidebarWidth);
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth);
@@ -54,20 +295,30 @@ export function Sidebar() {
   );
   const clinicalSections = useMemo<NavSectionConfig[]>(() => {
     if (!isClinicalWorkspace) return [];
+    const canReach = (path: string) =>
+      !role || isPathAllowedForRole(role, resolveNavigationTarget(path));
     return clinicalNavigation
       .map((section) => ({
         labelKey: section.titleKey,
         items: section.items
-          .filter(
-            (item) =>
-              !role || isPathAllowedForRole(role, resolveNavigationTarget(item.path)),
-          )
-          .map((item) => ({
-            labelKey: item.labelKey,
-            path: item.path,
-            icon: navIcon(item.icon),
-            locked: false,
-          })),
+          .map((item) => {
+            const children = (item.children ?? [])
+              .filter((child) => canReach(child.path))
+              .map((child) => ({
+                labelKey: child.labelKey,
+                path: child.path,
+                icon: navIcon(child.icon ?? item.icon),
+              }));
+            return {
+              labelKey: item.labelKey,
+              ...(item.path ? { path: item.path } : {}),
+              icon: navIcon(item.icon),
+              locked: false,
+              ...(children.length > 0 ? { children } : {}),
+            };
+          })
+          .filter((item) => Boolean(item.path) || Boolean(item.children?.length))
+          .filter((item) => !item.path || canReach(item.path)),
       }))
       .filter((section) => section.items.length > 0);
   }, [clinicalNavigation, isClinicalWorkspace, role]);
@@ -181,73 +432,20 @@ export function Sidebar() {
                   </p>
                 )}
                 <ul className={clsx('space-y-1', density === 'compact' && 'space-y-0.5')}>
-                  {section.items.map((item) => {
-                    const Icon = item.icon;
-                    // Pass 2 already marked plan-locked items; the fallback keeps
-                    // any caller-constructed item behaving as before.
-                    const locked = item.locked ?? isItemLocked(item, planTier, section.minPlan);
-                    const targetPath = resolveNavigationTarget(item.path);
-                    const queryTargetIsActive = item.path.includes('?')
-                      && `${location.pathname}${location.search}` === item.path;
-                    const isItemActive = (navLinkIsActive: boolean) =>
-                      item.path.includes('?')
-                        ? queryTargetIsActive
-                        : navLinkIsActive || location.pathname === targetPath;
-                    const handleClick = (e: React.MouseEvent) => {
-                      if (locked) {
-                        e.preventDefault();
-                        pushUpgradeRequired(
-                          t(labelKeyFor(item.labelKey)),
-                          planRequiredForItem(item, section.minPlan)?.name ?? t('navigation.accessibility.higherPlan'),
-                          businessId,
-                        );
-                        if (window.innerWidth < 1024) setSidebarOpen(false);
-                        return;
-                      }
-                      if (window.innerWidth < 1024) setSidebarOpen(false);
-                    };
-                    return (
-                      <li key={`${item.labelKey}:${item.path}`} className="group relative">
-                        <NavLink
-                          to={item.path}
-                          end={isClinicalWorkspace && item.path === '/healthcare'}
-                          onClick={handleClick}
-                          className={({ isActive }) =>
-                            clsx(
-                              'relative flex items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors touch-manipulation',
-                              density === 'compact' ? 'py-1.5' : 'py-2.5',
-                              isItemActive(isActive) ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
-                              !sidebarOpen && 'justify-center',
-                              locked && 'opacity-60',
-                            )
-                          }
-                        >
-                          {({ isActive }) => (
-                            <>
-                              <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                              {sidebarOpen ? (
-                                <span className="flex flex-1 items-center justify-between gap-2 truncate">
-                                  <span className="truncate">{t(labelKeyFor(item.labelKey))}</span>
-                                  {locked && <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label={t('navigation.accessibility.upgradeRequired')} />}
-                                </span>
-                              ) : null}
-                              {!sidebarOpen && locked && (
-                                <Lock className="absolute right-1 top-1 h-2.5 w-2.5 text-gray-400" aria-hidden="true" />
-                              )}
-                              {isItemActive(isActive) && <span className="sr-only"> {t('navigation.accessibility.currentPage')}</span>}
-                            </>
-                          )}
-                        </NavLink>
-                        {!sidebarOpen && (
-                          <div className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-within:block">
-                            {t(labelKeyFor(item.labelKey))}
-                            {locked ? ` ${t('navigation.accessibility.upgradeSuffix')}` : ''}
-                            <div className="absolute right-full top-1/2 h-2 w-2 -translate-y-1/2 translate-x-1/2 rotate-45 bg-gray-900" />
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
+                  {section.items.map((item) => (
+                    <SidebarNavEntry
+                      key={`${item.labelKey}:${item.path ?? 'group'}`}
+                      item={item}
+                      sectionMinPlan={section.minPlan}
+                      sidebarOpen={sidebarOpen}
+                      density={density}
+                      isClinicalWorkspace={isClinicalWorkspace}
+                      planTier={planTier}
+                      businessId={businessId}
+                      labelKeyFor={labelKeyFor}
+                      setSidebarOpen={setSidebarOpen}
+                    />
+                  ))}
                 </ul>
               </div>
             );

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 const state = vi.hoisted(() => ({
@@ -64,9 +64,9 @@ vi.mock('@/lib/notifications', () => ({
 
 import { Sidebar } from '../Sidebar';
 
-function renderSidebar() {
+function renderSidebar(initialEntries: string[] = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <Sidebar />
     </MemoryRouter>,
   );
@@ -107,11 +107,72 @@ describe('healthcare sidebar', () => {
     expect(paths).toContain('/healthcare');
     expect(paths).toContain('/healthcare/pharmacy');
     expect(paths).toContain('/healthcare/lab');
-    expect(paths).toContain('/banking');
-    expect(paths).toContain('/taxation');
     expect(paths).not.toContain('/income');
     expect(paths).not.toContain('/invoices');
     expect(paths).not.toContain('/inventory');
+
+    // Finance workspaces are collapsed accordions until the operator opens them.
+    for (const parent of [
+      'nav.patientBilling',
+      'nav.staffPayroll',
+      'nav.banking',
+      'nav.generalLedger',
+      'nav.taxation',
+      'nav.clinicReports',
+    ]) {
+      expect(screen.getByRole('button', { name: parent })).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'nav.banking' }));
+    expect(linkPaths()).toEqual(expect.arrayContaining([
+      '/banking',
+      '/banking?tab=statements',
+      '/banking?tab=reconcile',
+      '/banking?tab=deposits',
+      '/banking?tab=currencies',
+    ]));
+  });
+
+  it('auto-expands a parent and highlights the exact tab child', () => {
+    renderSidebar(['/payroll?tab=leave']);
+
+    const parent = screen.getByRole('button', { name: 'nav.staffPayroll' });
+    expect(parent.getAttribute('aria-expanded')).toBe('true');
+    expect(parent.getAttribute('data-active')).toBe('true');
+    const leave = screen.getByRole('link', { name: 'nav.sub.payroll_leave' });
+    expect(leave.getAttribute('href')).toBe('/payroll?tab=leave');
+    expect(leave.getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'nav.sub.payroll_payruns' }).getAttribute('aria-current')).toBeNull();
+  });
+
+  it('keeps the accordion open after a tab redirect settles on its canonical route', () => {
+    renderSidebar(['/payroll/leave']);
+
+    const parent = screen.getByRole('button', { name: 'nav.staffPayroll' });
+    expect(parent.getAttribute('aria-expanded')).toBe('true');
+    expect(parent.getAttribute('data-active')).toBe('true');
+    expect(screen.getByRole('link', { name: 'nav.sub.payroll_leave' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'nav.sub.payroll_payruns' }).getAttribute('aria-current')).toBeNull();
+  });
+
+  it('keeps a deep-linked canonical child expanded and highlighted', () => {
+    renderSidebar(['/banking?tab=deposits']);
+
+    const parent = screen.getByRole('button', { name: 'nav.banking' });
+    expect(parent.getAttribute('aria-expanded')).toBe('true');
+    expect(parent.getAttribute('data-active')).toBe('true');
+    const deposits = screen.getByRole('link', { name: 'nav.sub.banking_deposits' });
+    expect(deposits.getAttribute('aria-current')).toBe('page');
+  });
+
+  it('expands a parent when a child is opened from the accordion', () => {
+    renderSidebar();
+    const parent = screen.getByRole('button', { name: 'nav.generalLedger' });
+    expect(parent.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(parent);
+    expect(parent.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('link', { name: 'nav.sub.gl_journals' }).getAttribute('href')).toBe('/accounting?tab=journals');
+    fireEvent.click(parent);
+    expect(parent.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('shows the contextual clinical labels', () => {
