@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { isHealthcareBusiness } from '@/lib/healthcare/access';
 import type { Row } from '@/dal/types/database';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -28,6 +29,7 @@ function DepartmentModal({
   initial,
   branches,
   costCentreCodes,
+  healthcareMode,
   onClose,
   onSubmit,
   isLoading,
@@ -36,6 +38,7 @@ function DepartmentModal({
   initial?: DepartmentFormData;
   branches: Row<'branches'>[];
   costCentreCodes: string[];
+  healthcareMode: boolean;
   onClose: () => void;
   onSubmit: (data: DepartmentFormData) => void;
   isLoading: boolean;
@@ -112,7 +115,7 @@ function DepartmentModal({
               ))}
             </select>
             <p className="mt-1 text-xs text-gray-600">{t('pages.departments.branchHelp')}</p>
-            {branches.length === 0 ? (
+            {healthcareMode && branches.length === 0 ? (
               <p className="mt-1 text-xs text-amber-700">
                 {t('pages.departments.noBranchesYet')}{' '}
                 <Link to="/branches" className="font-semibold underline">
@@ -149,7 +152,9 @@ function DepartmentModal({
 
 export function DepartmentsPage() {
   const { t } = useTranslation();
-  const businessId  = useAppStore((s) => s.currentBusiness?.business.id);
+  const currentBusiness = useAppStore((s) => s.currentBusiness?.business ?? null);
+  const businessId = currentBusiness?.id;
+  const healthcareMode = isHealthcareBusiness(currentBusiness);
   const queryClient = useQueryClient();
 
   const [modalOpen,   setModalOpen]   = useState(false);
@@ -228,6 +233,7 @@ export function DepartmentsPage() {
         </button>
       </div>
 
+      {healthcareMode ? (
       <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -260,6 +266,7 @@ export function DepartmentsPage() {
           </p>
         ) : null}
       </div>
+      ) : null}
 
       {/* Department list */}
       {isLoading ? (
@@ -387,6 +394,7 @@ export function DepartmentsPage() {
         costCentreCodes={(departments ?? [])
           .map((dept) => dept.cost_centre?.trim() ?? '')
           .filter((code, index, all) => Boolean(code) && all.indexOf(code) === index)}
+        healthcareMode={healthcareMode}
         onClose={() => setModalOpen(false)}
         onSubmit={(form) => createMutation.mutate(form)}
         isLoading={createMutation.isPending}
@@ -400,6 +408,7 @@ export function DepartmentsPage() {
         costCentreCodes={(departments ?? [])
           .map((dept) => dept.cost_centre?.trim() ?? '')
           .filter((code, index, all) => Boolean(code) && all.indexOf(code) === index)}
+        healthcareMode={healthcareMode}
         onClose={() => setEditTarget(null)}
         onSubmit={(form) =>
           editTarget && updateMutation.mutate({ id: editTarget.id, form })
