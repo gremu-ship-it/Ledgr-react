@@ -38,6 +38,8 @@ describe('manufacturing foundation migration contract', () => {
     // forward repair restoring the contained inventory-backfill contract, the
     // supervisor transaction-visibility restatement, the subscription lease
     // engine, manufacturing costing, and the healthcare clinic foundation.
+    // 20270105000000 restores the manufacturing dashboard capability contract
+    // after reconciling the production-only 20261125161314 hotfix.
     // Keep the migration head list below aligned with both lines.
     expect([
       '20261224000003',
@@ -99,6 +101,7 @@ describe('manufacturing foundation migration contract', () => {
       '20270102000000',
       '20270103000000',
       '20270104000000',
+      '20270105000000',
     ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);
