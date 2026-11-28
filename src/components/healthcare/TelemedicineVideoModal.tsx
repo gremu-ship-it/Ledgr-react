@@ -141,7 +141,7 @@ export function TelemedicineVideoModal({
             <div>
               <p className="text-sm font-semibold text-gray-900">{patientName}</p>
               <p className="font-mono text-[11px] text-gray-500">
-                {patient?.mrn ?? '—'} · {visit.visit_type}
+                {patient?.mrn ?? '—'} · {t(`healthcare.visitType.${visit.visit_type}`)}
               </p>
             </div>
             {visit.results_ready_for_review && (

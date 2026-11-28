@@ -165,7 +165,7 @@ export function RadiologyStation() {
     orderNumber: order.order_number,
     patientName: patientDisplayName(order.patient),
     mrn: order.patient?.mrn ?? '',
-    modality: item.modality,
+    modality: t(`healthcare.radiology.modalities.${item.modality}`),
     procedureName: item.procedure_name,
     bodySite: item.body_site,
     clinicalIndication: order.clinical_indication,
