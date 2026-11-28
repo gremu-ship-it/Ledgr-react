@@ -303,8 +303,21 @@ describe('CommandPalette nested clinical destinations', () => {
     fireEvent.change(input, { target: { value: 'VAT Returns' } });
     expect(screen.getAllByText('Taxation & Statutory › VAT Returns').length).toBeGreaterThan(0);
 
-    fireEvent.change(input, { target: { value: 'Branch Performance' } });
-    expect(screen.getAllByText('Financial & Clinic Reports › Branch Performance').length).toBeGreaterThan(0);
+    fireEvent.change(input, { target: { value: 'Department Perf.' } });
+    expect(screen.getAllByText('Financial & Clinic Reports › Branch / Department Perf.').length).toBeGreaterThan(0);
+
+    for (const label of [
+      'Trial Balance',
+      'Profit & Loss (P&L)',
+      'Balance Sheet',
+      'Cash Flow Statement',
+      'Revenue Breakdown',
+      'Changes in Equity',
+      'Branch / Department Perf.',
+    ]) {
+      fireEvent.change(input, { target: { value: label } });
+      expect(screen.getAllByText(`Financial & Clinic Reports › ${label}`).length).toBeGreaterThan(0);
+    }
   });
 });
 

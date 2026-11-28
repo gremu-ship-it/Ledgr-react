@@ -154,6 +154,20 @@ describe('healthcare sidebar', () => {
     expect(screen.getByRole('link', { name: 'nav.sub.payroll_payruns' }).getAttribute('aria-current')).toBeNull();
   });
 
+  it('highlights the exact report tab under Financial & Clinic Reports', () => {
+    renderSidebar(['/reports?tab=pnl']);
+
+    const parent = screen.getByRole('button', { name: 'nav.clinicReports' });
+    expect(parent.getAttribute('aria-expanded')).toBe('true');
+    expect(parent.getAttribute('data-active')).toBe('true');
+
+    const pnl = screen.getByRole('link', { name: 'nav.sub.profitAndLoss' });
+    expect(pnl.getAttribute('href')).toBe('/reports?tab=pnl');
+    expect(pnl.getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'nav.sub.trialBalance' }).getAttribute('aria-current')).toBeNull();
+    expect(screen.getByRole('link', { name: 'nav.sub.balanceSheet' }).getAttribute('aria-current')).toBeNull();
+  });
+
   it('keeps a deep-linked canonical child expanded and highlighted', () => {
     renderSidebar(['/banking?tab=deposits']);
 

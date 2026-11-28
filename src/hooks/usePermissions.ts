@@ -481,7 +481,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       // BOM routes (/manufacturing/bom, /manufacturing/production, etc.) share
       // the same authority as the workspace itself.
       if (path.startsWith('/manufacturing') || path.startsWith('/construction') || path.startsWith('/healthcare')) return true;
-      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/manufacturing'].includes(path);
+      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
       return path.startsWith('/construction') || ['/products', '/warehouse', '/transfers'].includes(path);
@@ -493,19 +493,19 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return path.startsWith('/construction') || ['/dashboard', '/products', '/warehouse', '/transfers'].includes(path);
 
     case 'sales_manager':
-      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
+      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
 
     case 'customer_service_rep':
       return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/pos'].includes(path);
 
     case 'tax_compliance_officer':
-      return ['/dashboard', '/tax', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
+      return ['/dashboard', '/tax', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
 
     case 'treasury_manager':
-      return isCashDepositsPath || isBankReconciliationPath || ['/dashboard', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
+      return isCashDepositsPath || isBankReconciliationPath || ['/dashboard', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
 
     case 'asset_manager':
-      return ['/dashboard', '/assets', '/capital', '/accounts', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
+      return ['/dashboard', '/assets', '/capital', '/accounts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
 
     case 'board_member':
       if (isPayrollRoute || path === '/settings') return false;
@@ -515,7 +515,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return path.startsWith('/construction') || ['/products', '/warehouse', '/transfers'].includes(path);
 
     case 'supervisor':
-      if (path === '/payroll' || path === '/cash-forecast' || path.startsWith('/reports/')) return false;
+      if (path === '/payroll' || path === '/cash-forecast' || path === '/reports' || path.startsWith('/reports/')) return false;
       return true;
 
     case 'auditor':
@@ -524,7 +524,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'payroll_manager':
-      if (isCashDepositsPath || isBankReconciliationPath || ['/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path)) {
+      if (isCashDepositsPath || isBankReconciliationPath || ['/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path)) {
         return false;
       }
       return true;

@@ -204,7 +204,13 @@ describe('Healthcare navigation & workspace architecture', () => {
       '/taxation', '/taxation?tab=vat', '/taxation?tab=wht',
     ]);
     expect(byKey('financial_reports')?.children?.map((child) => child.path)).toEqual([
-      '/reports', '/reports?tab=revenue', '/reports?tab=equity', '/reports?tab=branches',
+      '/reports?tab=trial-balance',
+      '/reports?tab=pnl',
+      '/reports?tab=balance-sheet',
+      '/reports?tab=cash-flow',
+      '/reports?tab=revenue',
+      '/reports?tab=equity',
+      '/reports?tab=branches',
     ]);
 
     // Accordion parents toggle state; they must not act as dead links.
@@ -214,7 +220,7 @@ describe('Healthcare navigation & workspace architecture', () => {
     }
 
     const subKeys = allItems(nav).filter((item) => item.labelKey.startsWith('nav.sub.')).map((item) => item.key);
-    expect(new Set(subKeys).size).toBe(21);
+    expect(new Set(subKeys).size).toBe(24);
     expect(subKeys).toEqual(expect.arrayContaining([
       'patient_invoices', 'pos_terminal', 'cash_drawer_shifts',
       'payroll_employees', 'payroll_payruns', 'payroll_leave',
@@ -222,8 +228,40 @@ describe('Healthcare navigation & workspace architecture', () => {
       'banking_deposits', 'banking_exchange_rates',
       'gl_accounts', 'gl_journals', 'gl_periods',
       'tax_overview', 'tax_vat', 'tax_wht',
-      'rep_statements', 'rep_revenue', 'rep_equity', 'rep_branches',
+      'rep_trial_balance', 'rep_pnl', 'rep_balance_sheet', 'rep_cash_flow',
+      'rep_revenue', 'rep_equity', 'rep_branches',
     ]));
+  });
+
+  it('exposes all 7 financial reports in the reports dropdown', () => {
+    const nav = buildNavigation({
+      subscriptionPlan: 'enterprise',
+      operatingModels: ['HEALTHCARE'],
+    });
+
+    const reportsSection = nav.find((section) => section.key === 'compliance_accounting');
+    const reportsItem = reportsSection?.items.find((item) => item.key === 'financial_reports');
+
+    expect(reportsItem?.children).toHaveLength(7);
+    const paths = reportsItem?.children?.map((child) => child.path);
+
+    expect(paths).toContain('/reports?tab=trial-balance');
+    expect(paths).toContain('/reports?tab=pnl');
+    expect(paths).toContain('/reports?tab=balance-sheet');
+    expect(paths).toContain('/reports?tab=cash-flow');
+    expect(paths).toContain('/reports?tab=revenue');
+    expect(paths).toContain('/reports?tab=equity');
+    expect(paths).toContain('/reports?tab=branches');
+
+    expect(reportsItem?.children?.map((child) => child.labelKey)).toEqual([
+      'nav.sub.trialBalance',
+      'nav.sub.profitAndLoss',
+      'nav.sub.balanceSheet',
+      'nav.sub.cashFlow',
+      'nav.sub.revenueBreakdown',
+      'nav.sub.changesInEquity',
+      'nav.sub.departmentPerformance',
+    ]);
   });
 
   it('gives the standard ERP fallback the same operational sub-menus', () => {
@@ -235,7 +273,7 @@ describe('Healthcare navigation & workspace architecture', () => {
     expect(itemByKey(nav, 'banking')?.children).toHaveLength(5);
     expect(itemByKey(nav, 'accounting')?.children).toHaveLength(3);
     expect(itemByKey(nav, 'taxation')?.children).toHaveLength(3);
-    expect(itemByKey(nav, 'reports')?.children).toHaveLength(4);
+    expect(itemByKey(nav, 'reports')?.children).toHaveLength(7);
     expect(itemByKey(nav, 'patient_billing_pos')).toBeUndefined();
   });
 
@@ -245,6 +283,11 @@ describe('Healthcare navigation & workspace architecture', () => {
     expect(isNavigationPathActive('/payroll?tab=leave', '/payroll/pay-runs', '')).toBe(false);
     expect(isNavigationPathActive('/banking?tab=reconcile', '/bank-reconciliation/reconcile', '')).toBe(true);
     expect(isNavigationPathActive('/reports?tab=revenue', '/reports/revenue-breakdown', '')).toBe(true);
+    expect(isNavigationPathActive('/reports?tab=pnl', '/reports', '?tab=pnl')).toBe(true);
+    expect(isNavigationPathActive('/reports?tab=pnl', '/reports/profit-loss', '')).toBe(true);
+    expect(isNavigationPathActive('/reports?tab=balance-sheet', '/reports/balance-sheet', '')).toBe(true);
+    expect(isNavigationPathActive('/reports?tab=cash-flow', '/reports/cash-flow', '')).toBe(true);
+    expect(isNavigationPathActive('/reports?tab=trial-balance', '/reports', '')).toBe(true);
     expect(isNavigationPathActive('/pos?tab=shifts', '/pos/shifts', '')).toBe(true);
     expect(isNavigationPathActive('/healthcare/billing', '/healthcare/billing', '?tab=anything')).toBe(false);
     expect(resolveNavigationTarget('/payroll?tab=payruns')).toBe('/payroll/pay-runs');

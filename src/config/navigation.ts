@@ -122,10 +122,13 @@ function taxationChildren(): NavSubItem[] {
 
 function reportChildren(): NavSubItem[] {
   return [
-    subItem('rep_statements', 'nav.sub.rep_statements', 'Financial Statements', '/reports', 'BarChart3'),
-    subItem('rep_revenue', 'nav.sub.rep_revenue', 'Revenue Breakdown', '/reports?tab=revenue', 'ChartPie'),
-    subItem('rep_equity', 'nav.sub.rep_equity', 'Equity Changes', '/reports?tab=equity', 'Scale'),
-    subItem('rep_branches', 'nav.sub.rep_branches', 'Branch Performance', '/reports?tab=branches', 'GitBranch'),
+    subItem('rep_trial_balance', 'nav.sub.trialBalance', 'Trial Balance', '/reports?tab=trial-balance', 'Scale'),
+    subItem('rep_pnl', 'nav.sub.profitAndLoss', 'Profit & Loss (P&L)', '/reports?tab=pnl', 'TrendingUp'),
+    subItem('rep_balance_sheet', 'nav.sub.balanceSheet', 'Balance Sheet', '/reports?tab=balance-sheet', 'Landmark'),
+    subItem('rep_cash_flow', 'nav.sub.cashFlow', 'Cash Flow Statement', '/reports?tab=cash-flow', 'Wallet'),
+    subItem('rep_revenue', 'nav.sub.revenueBreakdown', 'Revenue Breakdown', '/reports?tab=revenue', 'ChartPie'),
+    subItem('rep_equity', 'nav.sub.changesInEquity', 'Changes in Equity', '/reports?tab=equity', 'Scale'),
+    subItem('rep_branches', 'nav.sub.departmentPerformance', 'Branch / Department Perf.', '/reports?tab=branches', 'GitBranch'),
   ];
 }
 
@@ -387,6 +390,10 @@ const NAVIGATION_TARGETS: Readonly<Record<string, string>> = {
   '/accounting?tab=journals': '/journals',
   '/accounting?tab=periods': '/periods',
   '/reports': '/reports/trial-balance',
+  '/reports?tab=trial-balance': '/reports/trial-balance',
+  '/reports?tab=pnl': '/reports/profit-loss',
+  '/reports?tab=balance-sheet': '/reports/balance-sheet',
+  '/reports?tab=cash-flow': '/reports/cash-flow',
   '/reports?tab=revenue': '/reports/revenue-breakdown',
   '/reports?tab=equity': '/reports/changes-in-equity',
   '/reports?tab=branches': '/reports/branch-performance',
@@ -400,6 +407,15 @@ const NAVIGATION_TARGETS: Readonly<Record<string, string>> = {
   '/insights': '/ai',
   '/healthcare/wards': '/healthcare/wards',
   '/healthcare/admissions': '/healthcare/admissions',
+};
+
+/**
+ * Extra surfaces that render the same destination as a child. The reports
+ * workspace is the important case: `/reports` with no tab defaults to Trial
+ * Balance inside `ReportsPage`, even before its URL is canonicalized.
+ */
+const NAVIGATION_PATH_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  '/reports?tab=trial-balance': ['/reports'],
 };
 
 export function resolveNavigationTarget(path: string): string {
@@ -432,7 +448,9 @@ export function isNavigationPathActive(
   const destination = splitPath(path);
   if (destination.search) {
     if (pathname === destination.pathname && search === destination.search) return true;
-    return search === '' && pathname === resolveNavigationTarget(path);
+    return search === ''
+      && (pathname === resolveNavigationTarget(path)
+        || (NAVIGATION_PATH_ALIASES[path] ?? []).includes(pathname));
   }
   if (search) return false;
   return pathname === destination.pathname

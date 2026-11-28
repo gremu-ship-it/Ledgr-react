@@ -195,10 +195,13 @@
       "tax_overview": "Tax Overview",
       "tax_vat": "VAT Returns",
       "tax_wht": "WHT Schedule",
-      "rep_statements": "Financial Statements",
-      "rep_revenue": "Revenue Breakdown",
-      "rep_equity": "Equity Changes",
-      "rep_branches": "Branch Performance"
+      "trialBalance": "Trial Balance",
+      "profitAndLoss": "Profit & Loss (P&L)",
+      "balanceSheet": "Balance Sheet",
+      "cashFlow": "Cash Flow Statement",
+      "revenueBreakdown": "Revenue Breakdown",
+      "changesInEquity": "Changes in Equity",
+      "departmentPerformance": "Branch / Department Perf."
     },
     "reports": {
       "trialBalance": "Trial Balance",
