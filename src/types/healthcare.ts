@@ -11,6 +11,175 @@
 /** Result classification used by `labService.evaluateResultStatus`. */
 export type ResultStatus = 'pending' | 'normal' | 'abnormal' | 'critical';
 
+/** Triage acuity, ordered from most to least urgent. */
+export type AcuityLevel = 'emergency' | 'urgent' | 'priority' | 'routine';
+
+/** How the patient is being seen. */
+export type VisitType = 'in_person' | 'telemedicine' | 'home_visit';
+
+/** Lifecycle of a telemedicine waiting-room entry. */
+export type TelemedicineStatus =
+  | 'waiting'
+  | 'link_sent'
+  | 'in_call'
+  | 'completed'
+  | 'cancelled';
+
+/** Imaging modalities accepted by the radiology station. */
+export type RadiologyModality =
+  | 'xray'
+  | 'ultrasound'
+  | 'ct'
+  | 'mri'
+  | 'ecg'
+  | 'echo'
+  | 'mammography'
+  | 'other';
+
+export type RadiologyOrderStatus =
+  | 'ordered'
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
+
+export type RadiologyItemStatus =
+  | 'pending'
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
+
+export type RadiologyUrgency = 'routine' | 'urgent' | 'stat';
+
+/** One scan line inside a radiology requisition. */
+export interface RadiologyOrderItem {
+  id?: string;
+  radiology_order_id?: string;
+  business_id?: string;
+  modality: RadiologyModality;
+  procedure_name: string;
+  body_site?: string | null;
+  unit_price: number;
+  status: RadiologyItemStatus;
+  findings?: string | null;
+  impression?: string | null;
+  recommendations?: string | null;
+  image_urls?: string[];
+  technician_id?: string | null;
+  radiologist_id?: string | null;
+  performed_at?: string | null;
+  reported_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/** A radiology / imaging requisition (header + scan lines). */
+export interface RadiologyOrder {
+  id: string;
+  business_id: string;
+  visit_id: string;
+  patient_id: string;
+  doctor_id: string;
+  order_number: string;
+  status: RadiologyOrderStatus;
+  urgency: RadiologyUrgency;
+  clinical_indication?: string | null;
+  ordered_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  items?: RadiologyOrderItem[];
+  patient?: {
+    id?: string;
+    mrn: string;
+    first_name: string;
+    last_name: string;
+    phone?: string | null;
+    date_of_birth?: string | null;
+    gender?: string | null;
+  } | null;
+  visit?: {
+    id?: string;
+    visit_number?: string;
+    queue_token?: string | null;
+    acuity_level?: AcuityLevel | null;
+    visit_type?: string;
+    stage?: string;
+  } | null;
+}
+
+export interface RadiologyOrderItemInput {
+  modality: RadiologyModality;
+  procedureName: string;
+  bodySite?: string | null;
+  unitPrice: number;
+}
+
+/** One treatment-room / minor procedure performed during a visit. */
+export interface ClinicalProcedureOrder {
+  id?: string;
+  business_id: string;
+  visit_id: string;
+  patient_id: string;
+  doctor_id: string;
+  procedure_code?: string | null;
+  procedure_name: string;
+  category:
+    | 'minor_surgery'
+    | 'wound_care'
+    | 'injection'
+    | 'dressing'
+    | 'diagnostic'
+    | 'other';
+  status: 'ordered' | 'in_progress' | 'completed' | 'cancelled';
+  unit_price: number;
+  notes?: string | null;
+  performed_by?: string | null;
+  performed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/** Data the printable imaging report needs. */
+export interface RadiologyReportData {
+  businessName: string;
+  orderNumber: string;
+  patientName: string;
+  mrn: string;
+  modality: RadiologyModality | string;
+  procedureName: string;
+  bodySite?: string | null;
+  clinicalIndication?: string | null;
+  findings: string;
+  impression: string;
+  recommendations?: string | null;
+  imageUrls?: string[];
+  performedAt?: string | null;
+  reportedAt?: string | null;
+  radiologist?: string | null;
+  technician?: string | null;
+  labels: {
+    title: string;
+    patient: string;
+    mrn: string;
+    modality: string;
+    procedure: string;
+    bodySite: string;
+    indication: string;
+    findings: string;
+    impression: string;
+    recommendations: string;
+    images: string;
+    performedAt: string;
+    reportedAt: string;
+    radiologist: string;
+    technician: string;
+    signature: string;
+    disclaimer: string;
+  };
+}
+
 /** Formats accepted on a medication sticker. */
 export type MedicationLabelFormat = '58mm' | '80mm';
 

@@ -2,7 +2,7 @@ import { useDeferredValue, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClipboardList, Phone, Search, UserPlus, Users } from 'lucide-react';
+import { ClipboardList, Phone, Search, UserPlus, Users, Video } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import {
   AllergyPills,
@@ -18,6 +18,7 @@ import {
   searchPatients,
   type PatientRecord,
 } from '@/services/healthcareService';
+import { checkInPatient } from '@/services/clinicalFlowService';
 import { calculateAge, patientDisplayName } from '@/lib/healthcare/format';
 
 const TH_CLASS = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500';
@@ -36,6 +37,7 @@ export function PatientsPage() {
   const [showRegistration, setShowRegistration] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const [checkingInMode, setCheckingInMode] = useState<'clinic' | 'virtual' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const patientsQuery = useQuery({
@@ -47,12 +49,19 @@ export function PatientsPage() {
 
   const patients = patientsQuery.data ?? [];
 
-  const checkIn = async (patient: PatientRecord) => {
+  const checkIn = async (patient: PatientRecord, mode: 'clinic' | 'virtual' = 'clinic') => {
     if (!businessId || !patient.id) return;
     setActionError(null);
     setCheckingInId(patient.id);
+    setCheckingInMode(mode);
     try {
-      const visit = await checkInPatientVisit(businessId, patient.id, 'outpatient');
+      const visit =
+        mode === 'virtual'
+          ? await checkInPatient(businessId, {
+              patientId: patient.id,
+              visitType: 'telemedicine',
+            })
+          : await checkInPatientVisit(businessId, patient.id, 'outpatient');
       setStatusMessage(
         t('healthcare.patients.checkInSuccess', {
           patient: patientDisplayName(patient),
@@ -60,13 +69,20 @@ export function PatientsPage() {
         }),
       );
       await queryClient.invalidateQueries({ queryKey: ['healthcare', 'queue', businessId] });
-      if (visit.id) navigate(`/healthcare/consultation?visitId=${visit.id}`);
+      if (visit.id) {
+        navigate(
+          mode === 'virtual'
+            ? '/healthcare/telemedicine'
+            : `/healthcare/consultation?visitId=${visit.id}`,
+        );
+      }
     } catch (error) {
       setActionError(
         error instanceof Error ? error.message : t('healthcare.patients.checkInError'),
       );
     } finally {
       setCheckingInId(null);
+      setCheckingInMode(null);
     }
   };
 
@@ -204,10 +220,21 @@ export function PatientsPage() {
                           size="sm"
                           variant="secondary"
                           disabled={!canWrite || checkingInId === patient.id}
-                          isLoading={checkingInId === patient.id}
+                          isLoading={checkingInId === patient.id && checkingInMode === 'clinic'}
                           onClick={() => void checkIn(patient)}
                         >
                           {t('healthcare.patients.checkIn')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={!canWrite || checkingInId === patient.id}
+                          isLoading={checkingInId === patient.id && checkingInMode === 'virtual'}
+                          onClick={() => void checkIn(patient, 'virtual')}
+                          title={t('healthcare.patients.checkInVirtual')}
+                        >
+                          <Video className="h-3.5 w-3.5" aria-hidden />
+                          {t('healthcare.patients.checkInVirtual')}
                         </Button>
                         <Button
                           size="sm"

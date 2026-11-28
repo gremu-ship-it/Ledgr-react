@@ -79,6 +79,18 @@ describe('Healthcare navigation & workspace architecture', () => {
       ?.items.map((item) => item.path);
     expect(clinicalItems).toContain('/healthcare/pharmacy');
     expect(clinicalItems).toContain('/healthcare/lab');
+    expect(clinicalItems).toContain('/healthcare/triage');
+    expect(clinicalItems).toContain('/healthcare/telemedicine');
+    expect(clinicalItems).toContain('/healthcare/radiology');
+    expect(
+      itemByKey(
+        buildNavigation({ subscriptionPlan: 'enterprise', operatingModels: ['HEALTHCARE'] }),
+        'nurse_triage',
+      ),
+    ).toMatchObject({
+      path: '/healthcare/triage',
+      requiredOperatingModel: 'HEALTHCARE',
+    });
 
     const paths = allPaths(nav);
     expect(paths).not.toContain('/inventory');

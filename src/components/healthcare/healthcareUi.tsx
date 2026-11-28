@@ -9,8 +9,12 @@ const STAGE_STYLES: Record<VisitStage, string> = {
   triaged: 'bg-sky-50 text-sky-700 border-sky-200',
   with_doctor: 'bg-violet-50 text-violet-700 border-violet-200',
   in_lab: 'bg-amber-50 text-amber-800 border-amber-200',
+  in_radiology: 'bg-cyan-50 text-cyan-800 border-cyan-200',
+  in_diagnostics: 'bg-teal-50 text-teal-800 border-teal-200',
+  results_review: 'bg-orange-50 text-orange-800 border-orange-200',
   at_pharmacy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   in_billing: 'bg-rose-50 text-rose-700 border-rose-200',
+  admitted: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   completed: 'bg-gray-100 text-gray-600 border-gray-200',
   cancelled: 'bg-red-50 text-red-700 border-red-200',
 };

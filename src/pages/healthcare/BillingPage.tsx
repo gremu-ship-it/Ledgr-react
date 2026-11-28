@@ -48,6 +48,7 @@ import { formatDateValue, patientDisplayName } from '@/lib/healthcare/format';
 const CATEGORY_LABEL_KEYS: Record<BillingCategory, string> = {
   consultation: 'healthcare.billing.categoryConsultation',
   laboratory: 'healthcare.billing.categoryLaboratory',
+  radiology: 'healthcare.billing.categoryRadiology',
   pharmacy: 'healthcare.billing.categoryPharmacy',
   procedure: 'healthcare.billing.categoryProcedure',
   accommodation: 'healthcare.billing.categoryAccommodation',
@@ -56,6 +57,7 @@ const CATEGORY_LABEL_KEYS: Record<BillingCategory, string> = {
 const CATEGORY_STYLES: Record<BillingCategory, string> = {
   consultation: 'bg-brand-50 text-brand-700 border-brand-200',
   laboratory: 'bg-amber-50 text-amber-800 border-amber-200',
+  radiology: 'bg-cyan-50 text-cyan-800 border-cyan-200',
   pharmacy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   procedure: 'bg-violet-50 text-violet-700 border-violet-200',
   accommodation: 'bg-sky-50 text-sky-700 border-sky-200',
@@ -168,6 +170,8 @@ export function BillingPage() {
         ? 'laboratory'
         : item.category === 'pharmacy'
         ? 'medication'
+        : item.category === 'radiology'
+        ? 'procedure'
         : item.category) as ClaimServiceCategory,
       description: item.description,
       amount: item.total,
@@ -196,6 +200,7 @@ export function BillingPage() {
       if (category === 'medication') return 'pharmacy';
       if (category === 'laboratory') return 'laboratory';
       if (category === 'consultation') return 'consultation';
+      if (category === 'procedure') return 'procedure';
       if (category === 'accommodation') return 'accommodation';
       return 'procedure';
     };

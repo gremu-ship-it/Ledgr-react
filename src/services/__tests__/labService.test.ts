@@ -519,11 +519,17 @@ describe('verifyLabOrder', () => {
       verified_by: 'tech-1',
     });
 
-    const visitUpdate = lab.calls.find(
+    const visitUpdates = lab.calls.filter(
       (call) => call.table === 'patient_visits' && call.operation === 'update',
     );
-    expect(visitUpdate?.values).toEqual({ stage: 'with_doctor' });
-    expect(visitUpdate?.filters).toContainEqual(['eq', ['stage', 'in_lab']]);
+    expect(visitUpdates[0]?.values).toEqual({ stage: 'in_diagnostics' });
+    expect(visitUpdates[0]?.filters).toContainEqual(['eq', ['stage', 'in_lab']]);
+    // Imaging has no open order in this fixture, so the patient loops straight
+    // back to the doctor for results review.
+    expect(visitUpdates[1]?.values).toMatchObject({
+      stage: 'results_review',
+      results_ready_for_review: true,
+    });
   });
 });
 

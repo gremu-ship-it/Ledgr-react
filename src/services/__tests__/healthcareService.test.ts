@@ -190,6 +190,7 @@ describe('visit check-in and triage', () => {
       visit_date: '2026-11-27',
       visit_type: 'outpatient',
       stage: 'registered',
+      queue_token: 'Q-001',
     });
   });
 
@@ -283,6 +284,61 @@ describe('patient bill calculation', () => {
     expect(bill.subtotal).toBe(15_000 + 8_000 + 3_000 + 3_000);
     expect(bill.tax).toBe(0);
     expect(bill.total).toBe(29_000);
+  });
+
+  it('aggregates radiology scans and treatment-room procedures into the visit bill', async () => {
+    hc.handlers.set('patient_visits', () => ({ data: visitRow(), error: null }));
+    hc.handlers.set('lab_orders', () => ({ data: [], error: null }));
+    hc.handlers.set('prescriptions', () => ({ data: [], error: null }));
+    hc.handlers.set('radiology_orders', () => ({
+      data: [
+        {
+          id: 'rad-1',
+          status: 'completed',
+          items: [
+            {
+              id: 'radi-1',
+              radiology_order_id: 'rad-1',
+              modality: 'xray',
+              procedure_name: 'Chest X-Ray PA',
+              unit_price: 25_000,
+              status: 'completed',
+            },
+            {
+              id: 'radi-2',
+              radiology_order_id: 'rad-1',
+              modality: 'ultrasound',
+              procedure_name: 'Abdominal ultrasound',
+              unit_price: 18_000,
+              status: 'completed',
+            },
+          ],
+        },
+      ],
+      error: null,
+    }));
+    hc.handlers.set('clinical_procedure_orders', () => ({
+      data: [
+        {
+          id: 'proc-1',
+          procedure_name: 'Wound suturing',
+          unit_price: 12_000,
+          status: 'completed',
+        },
+      ],
+      error: null,
+    }));
+
+    const bill = await getPatientVisitBill(VISIT_ID);
+
+    const radiology = bill.items.filter((item) => item.category === 'radiology');
+    const procedures = bill.items.filter((item) => item.category === 'procedure');
+    expect(radiology).toHaveLength(2);
+    expect(radiology[0].description).toContain('Chest X-Ray PA');
+    expect(radiology[0].description).toContain('XRAY');
+    expect(procedures).toHaveLength(1);
+    expect(procedures[0]).toMatchObject({ total: 12_000 });
+    expect(bill.total).toBe(15_000 + 25_000 + 18_000 + 12_000);
   });
 
   it('adds one accommodation line per ward when the visit has an inpatient stay', async () => {

@@ -141,6 +141,18 @@ const InpatientAdmissionsStation = lazyPage(
   () => import('@/pages/healthcare/InpatientAdmissionsStation'),
   'InpatientAdmissionsStation',
 );
+const TriageStation = lazyPage(
+  () => import('@/pages/healthcare/TriageStation'),
+  'TriageStation',
+);
+const RadiologyStation = lazyPage(
+  () => import('@/pages/healthcare/RadiologyStation'),
+  'RadiologyStation',
+);
+const TelemedicineStation = lazyPage(
+  () => import('@/pages/healthcare/TelemedicineStation'),
+  'TelemedicineStation',
+);
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -838,6 +850,30 @@ function App() {
                     element={
                       <HealthcareVerticalGate>
                         <InpatientAdmissionsStation />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/triage"
+                    element={
+                      <HealthcareVerticalGate>
+                        <TriageStation />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/radiology"
+                    element={
+                      <HealthcareVerticalGate>
+                        <RadiologyStation />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/telemedicine"
+                    element={
+                      <HealthcareVerticalGate>
+                        <TelemedicineStation />
                       </HealthcareVerticalGate>
                     }
                   />
