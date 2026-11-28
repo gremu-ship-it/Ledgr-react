@@ -384,6 +384,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         requiredOperatingModels: ['HEALTHCARE'],
       },
       {
+        labelKey: 'nav.healthcare.catalogue',
+        path: '/healthcare/catalogue',
+        icon: Package,
+        minPlan: 'enterprise',
+        requiredOperatingModels: ['HEALTHCARE'],
+      },
+      {
         labelKey: 'nav.healthcare.wardsAndBeds',
         path: '/healthcare/wards',
         icon: BedDouble,

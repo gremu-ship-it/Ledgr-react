@@ -77,6 +77,7 @@ describe('healthcare vertical boundary', () => {
       '/healthcare/radiology',
       '/healthcare/billing',
       '/healthcare/pharmacy',
+      '/healthcare/catalogue',
       '/healthcare/wards',
       '/healthcare/admissions',
       '/healthcare/lab',
@@ -88,7 +89,7 @@ describe('healthcare vertical boundary', () => {
 
   it('keeps the Enterprise upsell path for a healthcare business below Enterprise', () => {
     const items = healthcarePaths(['HEALTHCARE'], 'growth');
-    expect(items).toHaveLength(13);
+    expect(items).toHaveLength(14);
     expect(items.every((item) => item.locked === true)).toBe(true);
   });
 });

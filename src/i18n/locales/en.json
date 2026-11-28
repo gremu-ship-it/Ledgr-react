@@ -237,7 +237,8 @@
       "insurance": "Insurance & Claims",
       "doctorFees": "Doctor Commissions",
       "wardsAndBeds": "Wards & Beds",
-      "inpatientRegistry": "Inpatient Registry"
+      "inpatientRegistry": "Inpatient Registry",
+      "catalogue": "Drug & Service Catalogue"
     },
     "sections": {
       "clinicalOperations": "Clinical Operations",
@@ -266,7 +267,7 @@
     "generalLedger": "General Ledger & Accounts",
     "taxation": "Taxation & Statutory",
     "clinicReports": "Financial & Clinic Reports",
-    "clinicalDepartments": "Clinical Departments",
+    "clinicalDepartments": "Departments & Cost Centres",
     "complianceAudit": "Compliance Audit Log",
     "aiAssistant": "Ledgr AI Assistant",
     "support": "Help & Support",
@@ -293,7 +294,8 @@
     "inpatientRegistry": "Inpatient Registry",
     "nurseTriage": "Nurse Triage",
     "telemedicine": "Telemedicine",
-    "radiologyStation": "Radiology & Imaging"
+    "radiologyStation": "Radiology & Imaging",
+    "branches": "Branches & Facilities"
   },
   "pages": {
     "inventory": {
@@ -370,7 +372,14 @@
       "moreActions": "More actions for {{name}}",
       "deactivate": "Deactivate",
       "costCentreValue": "Cost centre: {{value}}",
-      "branchValue": "Branch: {{name}}"
+      "branchValue": "Branch: {{name}}",
+      "linkageTitle": "Branch & cost-centre linkage",
+      "linkageSummary": "{{costCentres}} of {{total}} departments have a cost centre · {{linked}} linked to a branch.",
+      "manageBranches": "Manage branches",
+      "noBranchesYet": "No branches yet.",
+      "createBranch": "Create a branch",
+      "noBranchesSuffix": "to link this department to a facility.",
+      "unlinkedNotice": "Some departments are company-wide. Edit a department to link it to a branch and record its cost-centre code."
     }
   },
   "settings": {
@@ -5939,7 +5948,8 @@
       "done": "Done",
       "cancel": "Cancel",
       "notRecorded": "Not recorded",
-      "readOnly": "Your role can view this station but cannot make clinical changes."
+      "readOnly": "Your role can view this station but cannot make clinical changes.",
+      "save": "Save"
     },
     "pharmacy": {
       "title": "Pharmacy Dispensary",
@@ -6948,6 +6958,78 @@
       "procedurePlaceholder": "e.g. Wound suturing",
       "scanPlaceholder": "e.g. Chest X-Ray PA",
       "noScans": "Add at least one scan."
+    },
+    "catalogue": {
+      "title": "Drug & Service Catalogue",
+      "subtitle": "Record drugs that can be dispensed later, plus the supplies, services and products your facility sells.",
+      "backToPharmacy": "Back to pharmacy",
+      "addItem": "Add catalogue item",
+      "searchPlaceholder": "Search by name, strength, SKU or description",
+      "showInactive": "Show inactive",
+      "loading": "Loading the healthcare catalogue…",
+      "loadError": "Could not load the catalogue.",
+      "emptyTitle": "No catalogue items yet",
+      "emptyHint": "Add a drug, supply, service or product so it can be received into stock, dispensed or billed.",
+      "saveError": "The catalogue item could not be saved. Check the details and try again.",
+      "deactivateError": "The item could not be deactivated.",
+      "createTitle": "Add Catalogue Item",
+      "editTitle": "Edit Catalogue Item",
+      "formSubtitle": "Drugs are received into pharmacy batches; services and products are available for patient billing.",
+      "create": "Add item",
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "receiveStock": "Receive stock",
+      "dispensable": "Dispensable",
+      "perUnit": "per {{unit}}",
+      "expires": "Expires {{date}}",
+      "noStock": "No usable stock",
+      "notTracked": "Not tracked",
+      "active": "Active",
+      "inactive": "Inactive",
+      "readOnly": "Your role cannot change the healthcare catalogue.",
+      "metrics": {
+        "total": "Active items",
+        "drugs": "Drugs",
+        "services": "Services",
+        "outOfStock": "Drugs out of stock"
+      },
+      "filters": {
+        "all": "All items"
+      },
+      "kinds": {
+        "drug": "Drug",
+        "supply": "Supply",
+        "service": "Service",
+        "product": "Product"
+      },
+      "columns": {
+        "item": "Item",
+        "kind": "Type",
+        "price": "Selling price",
+        "stock": "Stock",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "form": {
+        "kind": "Catalogue type",
+        "name": "Item name",
+        "nameHint": "Use the name clinicians and the pharmacy will recognise.",
+        "namePlaceholder": "e.g. Amoxicillin",
+        "strength": "Strength",
+        "dosageForm": "Dosage form",
+        "dosagePlaceholder": "e.g. capsule, tablet, syrup",
+        "sku": "SKU / item code",
+        "skuPlaceholder": "e.g. AMX-500",
+        "unit": "Dispensing / sale unit",
+        "unitPlaceholder": "e.g. capsule, vial, each, session",
+        "salePrice": "Selling price ({{currency}})",
+        "purchasePrice": "Cost price ({{currency}})",
+        "trackInventory": "Track stock for this item",
+        "reorderLevel": "Reorder level",
+        "description": "Description",
+        "active": "Active in the catalogue",
+        "drugHint": "Drugs default to dispensable and must be received into a pharmacy batch before they can be handed out."
+      }
     }
   }
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,6 +7,7 @@ import {
   Boxes,
   CheckCircle2,
   History,
+  Package,
   PackagePlus,
   Pill,
   Search,
@@ -152,10 +154,19 @@ export function PharmacyStation() {
             <p className="text-sm text-gray-500">{t('healthcare.pharmacy.subtitle')}</p>
           </div>
         </div>
-        <Button onClick={() => setReceiveOpen(true)} disabled={!canWrite}>
-          <PackagePlus className="h-4 w-4" aria-hidden />
-          {t('healthcare.pharmacy.receive.button')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/healthcare/catalogue"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            <Package className="h-4 w-4" aria-hidden />
+            {t('healthcare.catalogue.title')}
+          </Link>
+          <Button onClick={() => setReceiveOpen(true)} disabled={!canWrite}>
+            <PackagePlus className="h-4 w-4" aria-hidden />
+            {t('healthcare.pharmacy.receive.button')}
+          </Button>
+        </div>
       </header>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
