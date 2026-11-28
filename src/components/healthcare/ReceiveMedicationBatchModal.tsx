@@ -21,19 +21,23 @@ interface ReceiveBatchProps {
   businessId: string | null;
   canWrite: boolean;
   defaultMedicationName?: string;
+  /** Optional products.id when the delivery is recorded from the catalogue. */
+  defaultProductId?: string | null;
   onCreated?: (batch: MedicationBatch) => void;
 }
 
 export function ReceiveMedicationBatchModal({
   open,
   defaultMedicationName = '',
+  defaultProductId = null,
   ...props
 }: ReceiveBatchProps) {
   if (!open) return null;
   return (
     <ReceiveBatchBody
-      key={defaultMedicationName}
+      key={`${defaultMedicationName}-${defaultProductId ?? ''}`}
       defaultMedicationName={defaultMedicationName}
+      defaultProductId={defaultProductId ?? null}
       {...props}
     />
   );
@@ -44,8 +48,9 @@ function ReceiveBatchBody({
   businessId,
   canWrite,
   defaultMedicationName,
+  defaultProductId,
   onCreated,
-}: Omit<ReceiveBatchProps, 'open'> & { defaultMedicationName: string }) {
+}: Omit<ReceiveBatchProps, 'open'> & { defaultMedicationName: string; defaultProductId: string | null }) {
   const { t } = useTranslation();
   const today = toDateKey();
   const earliestExpiry = addDaysToDateKey(today, 1);
@@ -69,6 +74,7 @@ function ReceiveBatchBody({
     try {
       const batch = await createMedicationBatch({
         businessId,
+        productId: defaultProductId,
         medicationName,
         batchNumber,
         quantityReceived: Number(quantity),

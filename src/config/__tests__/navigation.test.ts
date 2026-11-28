@@ -78,6 +78,7 @@ describe('Healthcare navigation & workspace architecture', () => {
       .find((section) => section.key === 'clinical_operations')
       ?.items.map((item) => item.path);
     expect(clinicalItems).toContain('/healthcare/pharmacy');
+    expect(clinicalItems).toContain('/healthcare/catalogue');
     expect(clinicalItems).toContain('/healthcare/lab');
     expect(clinicalItems).toContain('/healthcare/triage');
     expect(clinicalItems).toContain('/healthcare/telemedicine');
@@ -101,7 +102,8 @@ describe('Healthcare navigation & workspace architecture', () => {
     expect(paths).toContain('/assets');
     expect(paths).toContain('/expenses');
     expect(paths).toContain('/audit-logs');
-    expect(paths).toContain('/settings/organization');
+    expect(paths).toContain('/departments');
+    expect(paths).toContain('/branches');
   });
 
   it('keeps contextual clinical labels in the five groups', () => {
@@ -124,9 +126,9 @@ describe('Healthcare navigation & workspace architecture', () => {
       labelKey: 'nav.complianceAudit',
       defaultLabel: 'Compliance Audit Log',
     });
-    expect(byPath.get('/settings/organization')).toMatchObject({
+    expect(byPath.get('/departments')).toMatchObject({
       labelKey: 'nav.clinicalDepartments',
-      defaultLabel: 'Clinical Departments',
+      defaultLabel: 'Departments & Cost Centres',
     });
   });
 

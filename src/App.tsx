@@ -121,6 +121,10 @@ const PharmacyStation = lazyPage(
   () => import('@/pages/healthcare/PharmacyStation'),
   'PharmacyStation',
 );
+const CataloguePage = lazyPage(
+  () => import('@/pages/healthcare/CataloguePage'),
+  'CataloguePage',
+);
 const LabStation = lazyPage(
   () => import('@/pages/healthcare/LabStation'),
   'LabStation',
@@ -810,6 +814,14 @@ function App() {
                     element={
                       <HealthcareVerticalGate>
                         <PharmacyStation />
+                      </HealthcareVerticalGate>
+                    }
+                  />
+                  <Route
+                    path="/healthcare/catalogue"
+                    element={
+                      <HealthcareVerticalGate>
+                        <CataloguePage />
                       </HealthcareVerticalGate>
                     }
                   />
