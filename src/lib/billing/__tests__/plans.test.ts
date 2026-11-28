@@ -190,7 +190,7 @@ describe('plan catalogue integration parity', () => {
     for (const name of ['Journals', 'Period Management', 'Audit Log', 'Contacts', 'Branches', 'Departments']) {
       expect(app).toContain(`capability="accounting_organisation" featureName="${name}"`);
     }
-    expect(app).toContain('<Route path="/payroll" element={<Navigate to="/payroll/employees" replace />} />');
+    expect(app).toContain('basePath="/payroll" fallback="/payroll/employees"');
     expect(app).toContain('<Route path="/payroll/tax-config" element={');
     const payrollPage = source('src/pages/PayrollPage.tsx');
     expect(payrollPage).toContain("hasCapability(planTier, 'accounting_organisation')");

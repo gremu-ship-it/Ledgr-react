@@ -361,15 +361,15 @@ describe('construction vertical navigation cleanup', () => {
         projectBasedBusiness.operating_models,
       )
         .flatMap((section) => section.items)
-        .filter((item) => ['/products', '/warehouse', '/transfers'].includes(item.path));
+        .filter((item) => Boolean(item.path) && ['/products', '/warehouse', '/transfers'].includes(item.path!));
 
       expect(constructionItems.map((item) => item.path)).toEqual(['/products', '/warehouse', '/transfers']);
       for (const item of constructionItems) {
         // Same gate as the default item: only the label key moved.
-        expect(item.requiresOrgCapability).toBe(navItemForPath(item.path)?.requiresOrgCapability);
-        expect(item.requiresCapability).toBe(navItemForPath(item.path)?.requiresCapability);
-        expect(item.partnerFeature).toBe(navItemForPath(item.path)?.partnerFeature);
-        expect(item.icon).toBe(navItemForPath(item.path)?.icon);
+        expect(item.requiresOrgCapability).toBe(navItemForPath(item.path!)?.requiresOrgCapability);
+        expect(item.requiresCapability).toBe(navItemForPath(item.path!)?.requiresCapability);
+        expect(item.partnerFeature).toBe(navItemForPath(item.path!)?.partnerFeature);
+        expect(item.icon).toBe(navItemForPath(item.path!)?.icon);
       }
     });
 

@@ -18,7 +18,7 @@ function healthcarePaths(
     operatingModels,
   )
     .flatMap((section) => section.items)
-    .filter((item) => item.path.startsWith('/healthcare'));
+    .filter((item) => item.path?.startsWith('/healthcare'));
 }
 
 describe('healthcare vertical boundary', () => {

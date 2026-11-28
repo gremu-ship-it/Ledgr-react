@@ -8,14 +8,32 @@
  * operating model. Non-clinical tenants continue to use the standard ERP
  * fallback defined by `buildNavigation` (the live sidebar continues to use the
  * richer capability/partner-aware configuration in `navConfig.ts`).
+ *
+ * Operational groups (billing/POS, payroll, banking/clearing, general ledger,
+ * tax and reports) are depth-preserving accordions: the parent carries no
+ * destination of its own, while every child keeps the exact path (including a
+ * `?tab=` query) that the application resolves to a canonical screen.
  */
+
+export interface NavSubItem {
+  key: string;
+  labelKey: string;
+  defaultLabel: string;
+  path: string;
+  icon?: string;
+}
 
 export interface NavItem {
   key: string;
   labelKey: string;
   defaultLabel: string;
-  path: string;
+  /**
+   * Leaf destination. Accordion parents are intentionally pathless: their
+   * button toggles the group, and the active state is derived from a child.
+   */
+  path?: string;
   icon: string;
+  children?: NavSubItem[];
   enterpriseOnly?: boolean;
   requiredOperatingModel?: string;
   badge?: string;
@@ -57,6 +75,60 @@ function healthcareItem(
   };
 }
 
+/** One destination inside an operational accordion. */
+function subItem(
+  key: string,
+  labelKey: string,
+  defaultLabel: string,
+  path: string,
+  icon: string,
+): NavSubItem {
+  return { key, labelKey, defaultLabel, path, icon };
+}
+
+function payrollChildren(): NavSubItem[] {
+  return [
+    subItem('payroll_employees', 'nav.sub.payroll_employees', 'Employees', '/payroll', 'Users'),
+    subItem('payroll_payruns', 'nav.sub.payroll_payruns', 'Pay Runs', '/payroll?tab=payruns', 'UserCheck'),
+    subItem('payroll_leave', 'nav.sub.payroll_leave', 'Leave Requests', '/payroll?tab=leave', 'CalendarDays'),
+  ];
+}
+
+function bankingChildren(): NavSubItem[] {
+  return [
+    subItem('banking_accounts', 'nav.sub.banking_accounts', 'Bank Accounts', '/banking', 'Landmark'),
+    subItem('banking_statements', 'nav.sub.banking_statements', 'Bank Statements', '/banking?tab=statements', 'FileText'),
+    subItem('banking_reconciliation', 'nav.sub.banking_reconciliation', 'Account Reconciliation', '/banking?tab=reconcile', 'CheckCheck'),
+    subItem('banking_deposits', 'nav.sub.banking_deposits', 'Cash Deposits', '/banking?tab=deposits', 'Banknote'),
+    subItem('banking_exchange_rates', 'nav.sub.banking_exchange_rates', 'Exchange Rates', '/banking?tab=currencies', 'ArrowLeftRight'),
+  ];
+}
+
+function accountingChildren(): NavSubItem[] {
+  return [
+    subItem('gl_accounts', 'nav.sub.gl_accounts', 'Chart of Accounts', '/accounting', 'BookOpen'),
+    subItem('gl_journals', 'nav.sub.gl_journals', 'Journal Entries', '/accounting?tab=journals', 'FileSpreadsheet'),
+    subItem('gl_periods', 'nav.sub.gl_periods', 'Period Management', '/accounting?tab=periods', 'CalendarRange'),
+  ];
+}
+
+function taxationChildren(): NavSubItem[] {
+  return [
+    subItem('tax_overview', 'nav.sub.tax_overview', 'Tax Overview', '/taxation', 'Percent'),
+    subItem('tax_vat', 'nav.sub.tax_vat', 'VAT Returns', '/taxation?tab=vat', 'FileSpreadsheet'),
+    subItem('tax_wht', 'nav.sub.tax_wht', 'WHT Schedule', '/taxation?tab=wht', 'FileCheck2'),
+  ];
+}
+
+function reportChildren(): NavSubItem[] {
+  return [
+    subItem('rep_statements', 'nav.sub.rep_statements', 'Financial Statements', '/reports', 'BarChart3'),
+    subItem('rep_revenue', 'nav.sub.rep_revenue', 'Revenue Breakdown', '/reports?tab=revenue', 'ChartPie'),
+    subItem('rep_equity', 'nav.sub.rep_equity', 'Equity Changes', '/reports?tab=equity', 'Scale'),
+    subItem('rep_branches', 'nav.sub.rep_branches', 'Branch Performance', '/reports?tab=branches', 'GitBranch'),
+  ];
+}
+
 /** Build the sidebar sections for the active business context. */
 export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
   const plan = (options.subscriptionPlan ?? '').toLowerCase().trim() || 'free';
@@ -92,7 +164,19 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
         titleKey: 'nav.sections.billingAndClaims',
         defaultTitle: 'Billing & Claims',
         items: [
-          healthcareItem('patient_billing', 'nav.patientBilling', 'Patient Invoices & POS', '/healthcare/billing', 'Receipt'),
+          {
+            key: 'patient_billing_pos',
+            labelKey: 'nav.patientBilling',
+            defaultLabel: 'Patient Billing & POS',
+            icon: 'Receipt',
+            enterpriseOnly: true,
+            requiredOperatingModel: 'HEALTHCARE',
+            children: [
+              subItem('patient_invoices', 'nav.sub.patient_invoices', 'Patient Invoices', '/healthcare/billing', 'Receipt'),
+              subItem('pos_terminal', 'nav.sub.pos_terminal', 'POS Terminal', '/pos', 'ShoppingCart'),
+              subItem('cash_drawer_shifts', 'nav.sub.cash_drawer_shifts', 'Cash Drawer Shifts', '/pos?tab=shifts', 'Clock3'),
+            ],
+          },
           healthcareItem('insurance_claims', 'nav.insuranceClaims', 'Insurance & HMO Claims', '/healthcare/insurance', 'ShieldCheck'),
           healthcareItem('doctor_commissions', 'nav.doctorCommissions', 'Doctor Commissions', '/healthcare/doctor-fees', 'BadgePercent'),
         ],
@@ -103,8 +187,20 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
         defaultTitle: 'Clinic Financials & Banking',
         items: [
           { key: 'expenses', labelKey: 'nav.clinicExpenses', defaultLabel: 'Clinic Expenses', path: '/expenses', icon: 'TrendingDown' },
-          { key: 'payroll', labelKey: 'nav.staffPayroll', defaultLabel: 'Staff Payroll', path: '/payroll', icon: 'UserCheck' },
-          { key: 'banking', labelKey: 'nav.banking', defaultLabel: 'Banking & POS Clearing', path: '/banking', icon: 'Landmark' },
+          {
+            key: 'staff_payroll',
+            labelKey: 'nav.staffPayroll',
+            defaultLabel: 'Staff Payroll',
+            icon: 'UserCheck',
+            children: payrollChildren(),
+          },
+          {
+            key: 'banking_pos_clearing',
+            labelKey: 'nav.banking',
+            defaultLabel: 'Banking & POS Clearing',
+            icon: 'Landmark',
+            children: bankingChildren(),
+          },
           { key: 'assets', labelKey: 'nav.medicalEquipment', defaultLabel: 'Medical Equipment & Assets', path: '/assets', icon: 'Boxes' },
           { key: 'budgets', labelKey: 'nav.budgets', defaultLabel: 'Budgets', path: '/budgets', icon: 'PiggyBank' },
         ],
@@ -114,9 +210,27 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
         titleKey: 'nav.sections.complianceAndAccounting',
         defaultTitle: 'Accounting, Tax & Compliance',
         items: [
-          { key: 'accounting', labelKey: 'nav.generalLedger', defaultLabel: 'General Ledger & Accounts', path: '/accounting', icon: 'BookOpen' },
-          { key: 'taxation', labelKey: 'nav.taxation', defaultLabel: 'Taxation & Statutory', path: '/taxation', icon: 'FileSpreadsheet' },
-          { key: 'reports', labelKey: 'nav.clinicReports', defaultLabel: 'Financial & Clinic Reports', path: '/reports', icon: 'BarChart3' },
+          {
+            key: 'general_ledger',
+            labelKey: 'nav.generalLedger',
+            defaultLabel: 'General Ledger & Accounts',
+            icon: 'BookOpen',
+            children: accountingChildren(),
+          },
+          {
+            key: 'taxation_statutory',
+            labelKey: 'nav.taxation',
+            defaultLabel: 'Taxation & Statutory',
+            icon: 'FileSpreadsheet',
+            children: taxationChildren(),
+          },
+          {
+            key: 'financial_reports',
+            labelKey: 'nav.clinicReports',
+            defaultLabel: 'Financial & Clinic Reports',
+            icon: 'BarChart3',
+            children: reportChildren(),
+          },
           { key: 'departments', labelKey: 'nav.clinicalDepartments', defaultLabel: 'Clinical Departments', path: '/settings/organization', icon: 'Building2' },
           { key: 'audit_logs', labelKey: 'nav.complianceAudit', defaultLabel: 'Compliance Audit Log', path: '/audit-logs', icon: 'ShieldAlert' },
         ],
@@ -170,7 +284,13 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
         { key: 'expenses', labelKey: 'nav.expenses', defaultLabel: 'Expenses', path: '/expenses', icon: 'TrendingDown' },
         { key: 'invoices', labelKey: 'nav.invoices', defaultLabel: 'Invoices', path: '/invoices', icon: 'Receipt' },
         { key: 'inventory', labelKey: 'nav.inventory', defaultLabel: 'Inventory', path: '/inventory', icon: 'Package' },
-        { key: 'payroll', labelKey: 'nav.payroll', defaultLabel: 'Payroll', path: '/payroll', icon: 'UserCheck' },
+        {
+          key: 'staff_payroll',
+          labelKey: 'nav.payroll',
+          defaultLabel: 'Payroll',
+          icon: 'UserCheck',
+          children: payrollChildren(),
+        },
       ],
     },
     {
@@ -178,12 +298,36 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
       titleKey: 'nav.sections.finance',
       defaultTitle: 'Finance & Banking',
       items: [
-        { key: 'banking', labelKey: 'nav.banking', defaultLabel: 'Banking', path: '/banking', icon: 'Landmark' },
-        { key: 'taxation', labelKey: 'nav.taxation', defaultLabel: 'Taxation', path: '/taxation', icon: 'FileSpreadsheet' },
-        { key: 'accounting', labelKey: 'nav.accounting', defaultLabel: 'Accounting', path: '/accounting', icon: 'BookOpen' },
+        {
+          key: 'banking_pos_clearing',
+          labelKey: 'nav.banking',
+          defaultLabel: 'Banking',
+          icon: 'Landmark',
+          children: bankingChildren(),
+        },
+        {
+          key: 'taxation_statutory',
+          labelKey: 'nav.taxation',
+          defaultLabel: 'Taxation',
+          icon: 'FileSpreadsheet',
+          children: taxationChildren(),
+        },
+        {
+          key: 'general_ledger',
+          labelKey: 'nav.accounting',
+          defaultLabel: 'Accounting',
+          icon: 'BookOpen',
+          children: accountingChildren(),
+        },
         { key: 'budgets', labelKey: 'nav.budgets', defaultLabel: 'Budgets', path: '/budgets', icon: 'PiggyBank' },
         { key: 'assets', labelKey: 'nav.assets', defaultLabel: 'Assets & Capital', path: '/assets', icon: 'Boxes' },
-        { key: 'reports', labelKey: 'nav.standardReports', defaultLabel: 'Reports', path: '/reports', icon: 'BarChart3' },
+        {
+          key: 'financial_reports',
+          labelKey: 'nav.standardReports',
+          defaultLabel: 'Reports',
+          icon: 'BarChart3',
+          children: reportChildren(),
+        },
       ],
     },
     {
@@ -205,6 +349,15 @@ export function usesClinicalNavigation(options: BuildNavOptions = {}): boolean {
   return buildNavigation(options).some((section) => section.key === 'clinical_operations');
 }
 
+/** Every leaf destination in a section list, including accordion children. */
+export function navigationPaths(nav: readonly NavSection[]): string[] {
+  return nav.flatMap((section) =>
+    section.items.flatMap((item) => [
+      ...(item.path ? [item.path] : []),
+      ...(item.children ?? []).map((child) => child.path),
+    ]),
+  );
+}
 
 /**
  * Canonical route that renders a builder path. Several clinical labels use a
@@ -212,13 +365,33 @@ export function usesClinicalNavigation(options: BuildNavOptions = {}): boolean {
  * historical canonical screen (for example `/bank-reconciliation/accounts`).
  * The App aliases keep the builder URLs live; the sidebar uses this map for
  * role reachability and active state.
+ *
+ * Query-bearing child paths resolve here too. The same table powers the
+ * landing redirects in `App.tsx`, so a deep link such as
+ * `/payroll?tab=leave` lands on the Leave screen while the sidebar still
+ * highlights the Leave sub-item.
  */
 const NAVIGATION_TARGETS: Readonly<Record<string, string>> = {
+  '/payroll': '/payroll/employees',
+  '/payroll?tab=payruns': '/payroll/pay-runs',
+  '/payroll?tab=leave': '/payroll/leave',
   '/banking': '/bank-reconciliation/accounts',
+  '/banking?tab=statements': '/bank-reconciliation/statements',
+  '/banking?tab=reconcile': '/bank-reconciliation/reconcile',
+  '/banking?tab=deposits': '/cash-deposits',
+  '/banking?tab=currencies': '/settings/exchange-rates',
   '/taxation': '/tax',
+  '/taxation?tab=vat': '/reports/vat-return',
+  '/taxation?tab=wht': '/reports/wht-schedule',
   '/accounting': '/accounts',
-  '/inventory': '/products',
+  '/accounting?tab=journals': '/journals',
+  '/accounting?tab=periods': '/periods',
   '/reports': '/reports/trial-balance',
+  '/reports?tab=revenue': '/reports/revenue-breakdown',
+  '/reports?tab=equity': '/reports/changes-in-equity',
+  '/reports?tab=branches': '/reports/branch-performance',
+  '/pos?tab=shifts': '/pos/shifts',
+  '/inventory': '/products',
   '/budgets': '/reports/budgets',
   '/audit-logs': '/audit',
   '/organization': '/departments',
@@ -231,4 +404,49 @@ const NAVIGATION_TARGETS: Readonly<Record<string, string>> = {
 
 export function resolveNavigationTarget(path: string): string {
   return NAVIGATION_TARGETS[path] ?? path;
+}
+
+function splitPath(path: string): { pathname: string; search: string } {
+  const queryIndex = path.indexOf('?');
+  if (queryIndex === -1) return { pathname: path, search: '' };
+  return {
+    pathname: path.slice(0, queryIndex),
+    search: path.slice(queryIndex),
+  };
+}
+
+/**
+ * Path + query aware active test shared by the sidebar accordions and tests.
+ *
+ * A query-bearing destination is active when the current URL matches it
+ * exactly, or when the browser has already settled on its canonical target
+ * (the landing redirects are `replace`, so `/payroll?tab=leave` becomes
+ * `/payroll/leave`). Plain destinations also accept their legacy alias target
+ * (`/banking` → `/bank-reconciliation/accounts`).
+ */
+export function isNavigationPathActive(
+  path: string,
+  pathname: string,
+  search = '',
+): boolean {
+  const destination = splitPath(path);
+  if (destination.search) {
+    if (pathname === destination.pathname && search === destination.search) return true;
+    return search === '' && pathname === resolveNavigationTarget(path);
+  }
+  if (search) return false;
+  return pathname === destination.pathname
+    || pathname === resolveNavigationTarget(destination.pathname);
+}
+
+/** True when a leaf or any of its accordion children is the current surface. */
+export function isNavigationItemActive(
+  item: NavItem,
+  pathname: string,
+  search = '',
+): boolean {
+  if (item.path && isNavigationPathActive(item.path, pathname, search)) return true;
+  return (item.children ?? []).some((child) =>
+    isNavigationPathActive(child.path, pathname, search),
+  );
 }

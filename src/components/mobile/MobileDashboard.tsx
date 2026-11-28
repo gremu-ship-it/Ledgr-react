@@ -435,14 +435,14 @@ export function MobileDashboard() {
           <p id="mobile-workspaces" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">All workspaces</p>
           <div className="mt-1 flex items-center justify-between gap-3">
             <p className="text-xs text-gray-500">Open any Ledgr tool when you need it.</p>
-            <button type="button" onClick={() => setPinnedPaths((paths) => paths.length ? [] : workspaceSections.flatMap((section) => section.items).slice(0, 4).map((item) => item.path))} className="shrink-0 text-[10px] font-black uppercase tracking-widest text-brand-700">{pinnedPaths.length ? 'Clear pins' : 'Pin essentials'}</button>
+            <button type="button" onClick={() => setPinnedPaths((paths) => paths.length ? [] : workspaceSections.flatMap((section) => section.items).filter((item) => Boolean(item.path)).slice(0, 4).map((item) => item.path!))} className="shrink-0 text-[10px] font-black uppercase tracking-widest text-brand-700">{pinnedPaths.length ? 'Clear pins' : 'Pin essentials'}</button>
           </div>
         </div>
         {pinnedPaths.length > 0 && (
           <div className="mb-3 grid grid-cols-2 gap-2">
-            {workspaceSections.flatMap((section) => section.items).filter((item) => pinnedPaths.includes(item.path)).map((item) => {
+            {workspaceSections.flatMap((section) => section.items).filter((item) => Boolean(item.path) && pinnedPaths.includes(item.path!)).map((item) => {
               const Icon = item.icon;
-              return <button key={item.path} type="button" onClick={() => navigate(item.path)} className="flex min-h-[56px] items-center gap-2 rounded-xl bg-brand-50 px-3 text-left text-xs font-bold text-brand-900"><Icon className="h-4 w-4" />{t(item.labelKey)}</button>;
+              return <button key={item.path} type="button" onClick={() => navigate(item.path!)} className="flex min-h-[56px] items-center gap-2 rounded-xl bg-brand-50 px-3 text-left text-xs font-bold text-brand-900"><Icon className="h-4 w-4" />{t(item.labelKey)}</button>;
             })}
           </div>
         )}
@@ -462,7 +462,7 @@ export function MobileDashboard() {
                     <button
                       key={item.path}
                       type="button"
-                      onClick={() => navigate(locked ? '/settings?tab=billing' : item.path)}
+                      onClick={() => navigate(locked ? '/settings?tab=billing' : (item.path ?? '/dashboard'))}
                       className={clsx(
                         'flex min-h-[76px] items-center gap-2 rounded-xl p-3 text-left transition-colors active:scale-[0.98]',
                         locked ? 'bg-gray-50 text-gray-500' : 'bg-white hover:bg-brand-50 active:bg-brand-50',

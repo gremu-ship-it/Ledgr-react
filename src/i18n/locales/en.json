@@ -177,6 +177,29 @@
     }
   },
   "nav": {
+    "sub": {
+      "patient_invoices": "Patient Invoices",
+      "pos_terminal": "POS Terminal",
+      "cash_drawer_shifts": "Cash Drawer Shifts",
+      "payroll_employees": "Employees",
+      "payroll_payruns": "Pay Runs",
+      "payroll_leave": "Leave Requests",
+      "banking_accounts": "Bank Accounts",
+      "banking_statements": "Bank Statements",
+      "banking_reconciliation": "Account Reconciliation",
+      "banking_deposits": "Cash Deposits",
+      "banking_exchange_rates": "Exchange Rates",
+      "gl_accounts": "Chart of Accounts",
+      "gl_journals": "Journal Entries",
+      "gl_periods": "Period Management",
+      "tax_overview": "Tax Overview",
+      "tax_vat": "VAT Returns",
+      "tax_wht": "WHT Schedule",
+      "rep_statements": "Financial Statements",
+      "rep_revenue": "Revenue Breakdown",
+      "rep_equity": "Equity Changes",
+      "rep_branches": "Branch Performance"
+    },
     "reports": {
       "trialBalance": "Trial Balance",
       "profitLoss": "Profit & Loss",
@@ -229,7 +252,7 @@
     "doctorStation": "Doctor Consultation",
     "labDiagnostics": "Lab Diagnostics",
     "pharmacyDispensary": "Pharmacy & Dispensary",
-    "patientBilling": "Patient Invoices & POS",
+    "patientBilling": "Patient Billing & POS",
     "insuranceClaims": "Insurance & HMO Claims",
     "doctorCommissions": "Doctor Commissions",
     "clinicExpenses": "Clinic Expenses",

@@ -73,29 +73,79 @@ export function CommandPalette() {
     // Vertical isolation: never offer a route that belongs to a different line
     // of business. A retail business must not be able to discover /healthcare
     // (or any other model-gated workspace) through the command palette.
-    const navItems: CommandItem[] = isClinicalWorkspace
-      ? clinicalNavigation.flatMap((section) =>
-          section.items.map((item) => ({
+    const clinicalNavItems: CommandItem[] = clinicalNavigation.flatMap((section) =>
+      section.items.flatMap((item) => {
+        const group = t(section.titleKey);
+        if (item.children?.length) {
+          return item.children.map((child) => ({
+            id: `${section.key}:${item.key}:${child.key}`,
+            label: `${t(item.labelKey)} › ${t(child.labelKey)}`,
+            keywords: `${t(item.labelKey)} ${t(child.labelKey)} ${item.defaultLabel} ${child.defaultLabel} ${child.path} ${group}`,
+            path: child.path,
+            icon: navIcon(child.icon ?? item.icon),
+            group,
+          }));
+        }
+        if (!item.path) return [];
+        return [{
+          id: `${section.key}:${item.key}`,
+          label: t(item.labelKey),
+          keywords: `${t(item.labelKey)} ${item.defaultLabel} ${item.path} ${group}`,
+          path: item.path,
+          icon: navIcon(item.icon),
+          group,
+        }];
+      }),
+    );
+
+    const standardNavItems: CommandItem[] = NAV_SECTIONS.flatMap((section) =>
+      section.items
+        .filter((item) => isOperatingModelEligible(item, operatingModels))
+        .flatMap((item) => {
+          if (item.children?.length) {
+            return item.children.map((child) => ({
+              id: `${section.labelKey}:${item.labelKey}:${child.labelKey}`,
+              label: `${t(item.labelKey)} › ${t(child.labelKey)}`,
+              keywords: `${t(item.labelKey)} ${t(child.labelKey)} ${item.path ?? ''} ${child.path} ${t(section.labelKey)}`,
+              path: child.path,
+              icon: child.icon,
+              group: t(section.labelKey),
+            }));
+          }
+          if (!item.path) return [];
+          return [{
             id: item.path,
             label: t(item.labelKey),
-            keywords: `${t(item.labelKey)} ${item.defaultLabel} ${item.path} ${t(section.titleKey)}`,
+            keywords: `${t(item.labelKey)} ${item.path} ${t(section.labelKey)}`,
             path: item.path,
-            icon: navIcon(item.icon),
-            group: t(section.titleKey),
-          })),
-        )
-      : NAV_SECTIONS.flatMap((section) =>
-          section.items
-            .filter((item) => isOperatingModelEligible(item, operatingModels))
-            .map((item) => ({
-              id: item.path,
-              label: t(item.labelKey),
-              keywords: `${t(item.labelKey)} ${item.path} ${t(section.labelKey)}`,
-              path: item.path,
-              icon: item.icon,
-              group: t(section.labelKey),
-            }))
+            icon: item.icon,
+            group: t(section.labelKey),
+          }];
+        }),
+    );
+
+    // The standard sidebar still renders the capability-aware legacy config,
+    // while `buildNavigation` owns the operational depth. Index those central
+    // child destinations too so payroll / banking / tax / ledger / report
+    // sub-screens are discoverable in a standard ERP tenant.
+    const centralChildItems: CommandItem[] = isClinicalWorkspace
+      ? []
+      : clinicalNavigation.flatMap((section) =>
+          section.items.flatMap((item) =>
+            (item.children ?? []).map((child) => ({
+              id: `central:${section.key}:${item.key}:${child.key}`,
+              label: `${t(item.labelKey)} › ${t(child.labelKey)}`,
+              keywords: `${t(item.labelKey)} ${t(child.labelKey)} ${item.defaultLabel} ${child.defaultLabel} ${child.path} ${t(section.titleKey)}`,
+              path: child.path,
+              icon: navIcon(child.icon ?? item.icon),
+              group: t(item.labelKey),
+            })),
+          ),
         );
+
+    const navItems: CommandItem[] = isClinicalWorkspace
+      ? clinicalNavItems
+      : [...standardNavItems, ...centralChildItems];
 
     const quickActions: CommandItem[] = isClinicalWorkspace
       ? [
