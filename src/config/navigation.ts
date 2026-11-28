@@ -285,7 +285,7 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
         { key: 'invoices', labelKey: 'nav.invoices', defaultLabel: 'Invoices', path: '/invoices', icon: 'Receipt' },
         { key: 'inventory', labelKey: 'nav.inventory', defaultLabel: 'Inventory', path: '/inventory', icon: 'Package' },
         {
-          key: 'staff_payroll',
+          key: 'payroll',
           labelKey: 'nav.payroll',
           defaultLabel: 'Payroll',
           icon: 'UserCheck',
@@ -299,21 +299,21 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
       defaultTitle: 'Finance & Banking',
       items: [
         {
-          key: 'banking_pos_clearing',
+          key: 'banking',
           labelKey: 'nav.banking',
           defaultLabel: 'Banking',
           icon: 'Landmark',
           children: bankingChildren(),
         },
         {
-          key: 'taxation_statutory',
+          key: 'taxation',
           labelKey: 'nav.taxation',
           defaultLabel: 'Taxation',
           icon: 'FileSpreadsheet',
           children: taxationChildren(),
         },
         {
-          key: 'general_ledger',
+          key: 'accounting',
           labelKey: 'nav.accounting',
           defaultLabel: 'Accounting',
           icon: 'BookOpen',
@@ -322,7 +322,7 @@ export function buildNavigation(options: BuildNavOptions = {}): NavSection[] {
         { key: 'budgets', labelKey: 'nav.budgets', defaultLabel: 'Budgets', path: '/budgets', icon: 'PiggyBank' },
         { key: 'assets', labelKey: 'nav.assets', defaultLabel: 'Assets & Capital', path: '/assets', icon: 'Boxes' },
         {
-          key: 'financial_reports',
+          key: 'reports',
           labelKey: 'nav.standardReports',
           defaultLabel: 'Reports',
           icon: 'BarChart3',

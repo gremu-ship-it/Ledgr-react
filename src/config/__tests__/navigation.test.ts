@@ -231,11 +231,11 @@ describe('Healthcare navigation & workspace architecture', () => {
       subscriptionPlan: 'pro',
       operatingModels: ['PRODUCT_SALES'],
     });
-    expect(itemByKey(nav, 'staff_payroll')?.children).toHaveLength(3);
-    expect(itemByKey(nav, 'banking_pos_clearing')?.children).toHaveLength(5);
-    expect(itemByKey(nav, 'general_ledger')?.children).toHaveLength(3);
-    expect(itemByKey(nav, 'taxation_statutory')?.children).toHaveLength(3);
-    expect(itemByKey(nav, 'financial_reports')?.children).toHaveLength(4);
+    expect(itemByKey(nav, 'payroll')?.children).toHaveLength(3);
+    expect(itemByKey(nav, 'banking')?.children).toHaveLength(5);
+    expect(itemByKey(nav, 'accounting')?.children).toHaveLength(3);
+    expect(itemByKey(nav, 'taxation')?.children).toHaveLength(3);
+    expect(itemByKey(nav, 'reports')?.children).toHaveLength(4);
     expect(itemByKey(nav, 'patient_billing_pos')).toBeUndefined();
   });
 
